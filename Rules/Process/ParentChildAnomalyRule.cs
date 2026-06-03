@@ -9,9 +9,9 @@ namespace WinEDR_MVP.Rules.Process
     // malware, phishing document exploitation, or browser exploit chains.
     public class ParentChildAnomalyRule : IDetectionRule
     {
-        public string RuleId => "HIDS-P4";
-        public string Name => "Suspicious Parent-Child Process";
-        public string Description => "Detects shell interpreters spawned by Office, PDF readers, or browsers.";
+        public string RuleId => "PROC-004";
+        public string Name => "Suspicious Child Process";
+        public string Description => "Detects shell interpreters spawned by Office applications or browsers.";
 
         private static readonly string[] HighRiskParents =
         [

@@ -17,8 +17,7 @@
     "C:\\Temp"
   ],
   "Rules": {
-    "HIDS-P1": { "Enabled": true, "Threshold": 1, "Severity": "High" },
-    "HIDS-N3": { "Enabled": true, "Threshold": 100, "Severity": "Medium" }
+    "NET-003": { "Enabled": true, "Threshold": 100, "Severity": "Medium" }
   },
   "NetworkScanWindowSeconds": 10
 }

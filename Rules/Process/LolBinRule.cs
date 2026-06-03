@@ -10,9 +10,9 @@ namespace WinEDR_MVP.Rules.Process
     // bypass defences — a common technique in fileless malware and red-team operations.
     public class LolBinRule : IDetectionRule
     {
-        public string RuleId => "HIDS-P5";
+        public string RuleId => "PROC-005";
         public string Name => "LOLBin Abuse";
-        public string Description => "Detects built-in Windows tools used with suspicious arguments.";
+        public string Description => "Detects built-in Windows tools invoked with malicious arguments.";
 
         private sealed record LolPattern(string[] TriggerArgs, string Reason, AlertSeverity Severity, AlertType Type);
 

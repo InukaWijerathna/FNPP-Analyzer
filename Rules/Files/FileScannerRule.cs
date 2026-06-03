@@ -10,9 +10,9 @@ namespace WinEDR_MVP.Rules.Files
     // MAL-F1/F5: File-based indicators in untrusted directories.
     public class FileScannerRule : IDetectionRule
     {
-        public string RuleId => "MAL-F";
-        public string Name => "Malware File Scanner";
-        public string Description => "Scans untrusted directories for suspicious file indicators.";
+        public string RuleId => "FILE";
+        public string Name => "File Indicator Scan";
+        public string Description => "Scans untrusted directories for suspicious file-based indicators.";
 
         private readonly AppConfig _config;
 
@@ -39,8 +39,8 @@ namespace WinEDR_MVP.Rules.Files
                             file.EndsWith(".txt.js",  StringComparison.OrdinalIgnoreCase))
                             events.Add(new DetectionEvent
                             {
-                                RuleId = "MAL-F1",
-                                RuleName = "Suspicious Double Extension",
+                                RuleId = "FILE-001",
+                                RuleName = "Double Extension File",
                                 Severity = AlertSeverity.High,
                                 Type = AlertType.MAL,
                                 Description = $"Double extension detected: {info.Name}",
@@ -53,7 +53,7 @@ namespace WinEDR_MVP.Rules.Files
                              file.EndsWith(".ps1", StringComparison.OrdinalIgnoreCase)))
                             events.Add(new DetectionEvent
                             {
-                                RuleId = "MAL-F5",
+                                RuleId = "FILE-002",
                                 RuleName = "Hidden Executable",
                                 Severity = AlertSeverity.Medium,
                                 Type = AlertType.MAL,

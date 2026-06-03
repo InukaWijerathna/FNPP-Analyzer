@@ -9,9 +9,9 @@ namespace WinEDR_MVP.Rules.Process
     // HIDS-P1: Detects system processes running outside their expected paths.
     public class SystemProcessMasqueradingRule : IDetectionRule
     {
-        public string RuleId => "HIDS-P1";
+        public string RuleId => "PROC-001";
         public string Name => "System Process Masquerading";
-        public string Description => "Detects system processes running outside legitimate paths.";
+        public string Description => "Detects system process names running outside their expected paths.";
 
         private readonly AppConfig _config;
 

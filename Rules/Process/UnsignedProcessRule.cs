@@ -13,9 +13,9 @@ namespace WinEDR_MVP.Rules.Process
     // An unsigned binary in System32 is a strong masquerading indicator.
     public class UnsignedProcessRule : IDetectionRule
     {
-        public string RuleId => "MAL-S";
+        public string RuleId => "PROC-006";
         public string Name => "Unsigned System Process";
-        public string Description => "Detects unsigned executables running from system directories.";
+        public string Description => "Detects unsigned executables running from Windows system directories.";
 
         private static readonly string[] SystemPaths =
         [

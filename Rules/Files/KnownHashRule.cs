@@ -13,9 +13,9 @@ namespace WinEDR_MVP.Rules.Files
     // Hashes sourced from public CISA/CERT advisories and VirusTotal reports.
     public class KnownHashRule : IDetectionRule
     {
-        public string RuleId => "MAL-H";
+        public string RuleId => "FILE-003";
         public string Name => "Known Malware Hash";
-        public string Description => "Matches SHA-256 hashes of files and running processes against known-bad IOCs.";
+        public string Description => "Matches file SHA-256 hashes against a known-bad IOC database.";
 
         // Extend this list from threat-intel feeds (MISP, OTX, CISA KEV, etc.)
         private static readonly HashSet<string> KnownBadHashes = new(StringComparer.OrdinalIgnoreCase)
@@ -91,7 +91,7 @@ namespace WinEDR_MVP.Rules.Files
         private static DetectionEvent MakeEvent(string name, string path, string hash,
             string desc, object metadata) => new()
         {
-            RuleId = "MAL-H",
+            RuleId = "FILE-003",
             RuleName = "Known Malware Hash",
             Severity = AlertSeverity.High,
             Type = AlertType.MAL,

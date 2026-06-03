@@ -12,9 +12,9 @@ namespace WinEDR_MVP.Rules.Files
     // PE import names are stored as plain ASCII strings, making them detectable via string scan.
     public class PeImportRule : IDetectionRule
     {
-        public string RuleId => "MAL-PE";
+        public string RuleId => "FILE-004";
         public string Name => "Suspicious PE Imports";
-        public string Description => "Detects executables importing API combinations associated with injection, keylogging, or ransomware.";
+        public string Description => "Detects executables importing API combinations associated with malware behaviour.";
 
         private const long MaxFileBytes = 32 * 1024 * 1024; // skip files > 32 MB
 
@@ -107,8 +107,8 @@ namespace WinEDR_MVP.Rules.Files
                     if (allFound)
                         yield return new DetectionEvent
                         {
-                            RuleId = "MAL-PE",
-                            RuleName = $"PE Imports: {sig.Name}",
+                            RuleId = "FILE-004",
+                            RuleName = $"Suspicious PE Imports: {sig.Name}",
                             Severity = sig.Severity,
                             Type = sig.Type,
                             Description = $"{fileName} imports APIs associated with {sig.Name}: {string.Join(", ", sig.Required)}",

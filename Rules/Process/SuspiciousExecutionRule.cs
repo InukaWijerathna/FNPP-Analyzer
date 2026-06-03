@@ -9,9 +9,9 @@ namespace WinEDR_MVP.Rules.Process
     // HIDS-P2/P3: Executables from untrusted paths; script engines running untrusted scripts.
     public class SuspiciousExecutionRule : IDetectionRule
     {
-        public string RuleId => "HIDS-P2/P3";
+        public string RuleId => "PROC-002";
         public string Name => "Suspicious Process Execution";
-        public string Description => "Detects executables or scripts running from user-writable directories.";
+        public string Description => "Detects executables and scripts running from user-writable directories.";
 
         private static readonly string[] ScriptEngines =
             ["powershell", "cmd", "wscript", "cscript", "mshta", "rundll32"];
@@ -46,8 +46,8 @@ namespace WinEDR_MVP.Rules.Process
                                 cmdLine.Contains(normalized, StringComparison.OrdinalIgnoreCase))
                                 events.Add(new DetectionEvent
                                 {
-                                    RuleId = "HIDS-P3",
-                                    RuleName = "Script Running from Untrusted Path",
+                                    RuleId = "PROC-003",
+                                    RuleName = "Script from Untrusted Path",
                                     Severity = AlertSeverity.Medium,
                                     Type = AlertType.TROJ,
                                     Description = $"{proc.ProcessName} executing a script from untrusted path: {bad}",
@@ -58,8 +58,8 @@ namespace WinEDR_MVP.Rules.Process
                         {
                             events.Add(new DetectionEvent
                             {
-                                RuleId = "HIDS-P2",
-                                RuleName = "Executable Running from Untrusted Path",
+                                RuleId = "PROC-002",
+                                RuleName = "Executable from Untrusted Path",
                                 Severity = AlertSeverity.Medium,
                                 Type = AlertType.MAL,
                                 Description = $"{proc.ProcessName} running from untrusted path: {exePath}",

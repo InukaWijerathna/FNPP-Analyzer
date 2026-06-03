@@ -10,9 +10,9 @@ namespace WinEDR_MVP.Rules.Network
     // HIDS-N1/N2/N3/N4: Network anomaly detection.
     public class SuspiciousNetworkActivityRule : IDetectionRule
     {
-        public string RuleId => "HIDS-N";
+        public string RuleId => "NET";
         public string Name => "Network Anomaly Detection";
-        public string Description => "Detects suspicious connections, port scanning, and traffic bursts.";
+        public string Description => "Detects suspicious outbound connections, port scanning, and traffic bursts.";
 
         private static readonly int[] SuspiciousPorts = [4444, 6667, 1337, 31337];
 
@@ -33,7 +33,7 @@ namespace WinEDR_MVP.Rules.Network
                 {
                     events.Add(new DetectionEvent
                     {
-                        RuleId = "HIDS-N1",
+                        RuleId = "NET-001",
                         RuleName = "Suspicious Outbound Port",
                         Severity = AlertSeverity.High,
                         Type = AlertType.TROJ,
@@ -52,20 +52,20 @@ namespace WinEDR_MVP.Rules.Network
             if (scanCandidate != null)
                 events.Add(new DetectionEvent
                 {
-                    RuleId = "HIDS-N2",
-                    RuleName = "Potential Port Scanning Behavior",
+                    RuleId = "NET-002",
+                    RuleName = "Port Scan Detected",
                     Severity = AlertSeverity.Medium,
                     Type = AlertType.RECON,
                     Description = $"Connected to {scanCandidate.Ports} distinct ports on {scanCandidate.IP}."
                 });
 
             // HIDS-N3: High total connection count
-            int threshold = _config.Rules.TryGetValue("HIDS-N3", out var cfg) ? cfg.Threshold : 100;
+            int threshold = _config.Rules.TryGetValue("NET-003", out var cfg) ? cfg.Threshold : 100;
             if (conns.Length > threshold)
                 events.Add(new DetectionEvent
                 {
-                    RuleId = "HIDS-N3",
-                    RuleName = "Abnormal Network Traffic Burst",
+                    RuleId = "NET-003",
+                    RuleName = "Connection Count Burst",
                     Severity = AlertSeverity.Medium,
                     Type = AlertType.RECON,
                     Description = $"High TCP connection count: {conns.Length} (threshold: {threshold})."
@@ -77,8 +77,8 @@ namespace WinEDR_MVP.Rules.Network
                 if (conn.RemoteEndPoint.Port == 9999)
                     events.Add(new DetectionEvent
                     {
-                        RuleId = "HIDS-N4",
-                        RuleName = "Suspected C2 Traffic Pattern",
+                        RuleId = "NET-004",
+                        RuleName = "Suspected C2 Traffic",
                         Severity = AlertSeverity.High,
                         Type = AlertType.BACK,
                         Description = "Detected suspicious traffic pattern (simulated payload match)."

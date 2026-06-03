@@ -10,9 +10,9 @@ namespace WinEDR_MVP.Rules.Persistence
     // HIDS-B1: Suspicious entries in Windows startup registry keys.
     public class StartupPersistenceRule : IDetectionRule
     {
-        public string RuleId => "HIDS-B1";
-        public string Name => "Startup Persistence";
-        public string Description => "Detects suspicious entries in Windows Startup registry keys.";
+        public string RuleId => "PERS-001";
+        public string Name => "Startup Registry Persistence";
+        public string Description => "Detects suspicious entries in Windows startup registry keys.";
 
         private static readonly string[] MonitoredKeys =
         [
@@ -42,8 +42,8 @@ namespace WinEDR_MVP.Rules.Persistence
                             if (reason != null)
                                 events.Add(new DetectionEvent
                                 {
-                                    RuleId = "HIDS-B1",
-                                    RuleName = "Suspicious Startup Item",
+                                    RuleId = "PERS-001",
+                                    RuleName = "Startup Registry Persistence",
                                     Severity = AlertSeverity.Medium,
                                     Type = AlertType.MAL,
                                     Description = $"Startup entry [{reason}] in {keyPath}: {name} -> {value}"
