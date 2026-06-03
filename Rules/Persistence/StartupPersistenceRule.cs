@@ -56,18 +56,39 @@ namespace WinEDR_MVP.Rules.Persistence
             return events;
         }
 
+        // Paths where legitimate software is expected — don't flag missing files here
+        private static readonly string[] TrustedInstallPrefixes =
+        [
+            @"C:\Program Files\",
+            @"C:\Program Files (x86)\",
+            @"C:\Windows\",
+        ];
+
         private static string? ClassifySuspicious(string value)
         {
             // Strip surrounding quotes and arguments to isolate the executable path
             string raw = value.TrimStart('"');
             int end = raw.IndexOf('"');
             string exePath = end > 0 ? raw[..end] : raw.Split(' ')[0];
+            exePath = Environment.ExpandEnvironmentVariables(exePath.Trim());
 
+            // Flag executables running from temp directories (high confidence)
             if (exePath.Contains(@"\Temp\", StringComparison.OrdinalIgnoreCase))
                 return "runs from Temp";
 
+            // Flag missing executables ONLY if they're outside trusted install paths.
+            // Legitimate software in Program Files may simply be uninstalled with a
+            // stale registry key — not inherently suspicious.
             if (!string.IsNullOrWhiteSpace(exePath) && !File.Exists(exePath))
-                return "target file not found";
+            {
+                bool inTrustedDir = false;
+                foreach (var prefix in TrustedInstallPrefixes)
+                    if (exePath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    { inTrustedDir = true; break; }
+
+                if (!inTrustedDir)
+                    return "target file not found outside known install paths";
+            }
 
             return null;
         }

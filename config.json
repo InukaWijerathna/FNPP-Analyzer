@@ -17,7 +17,7 @@
     "C:\\Temp"
   ],
   "Rules": {
-    "NET-003": { "Enabled": true, "Threshold": 100, "Severity": "Medium" }
+    "NET-003": { "Enabled": true, "Threshold": 200, "Severity": "Medium" }
   },
   "NetworkScanWindowSeconds": 10
 }

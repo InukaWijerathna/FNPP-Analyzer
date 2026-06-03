@@ -43,7 +43,7 @@ namespace WinEDR_MVP.Config
             ],
             Rules = new Dictionary<string, RuleConfig>
             {
-                ["NET-003"] = new RuleConfig { Enabled = true, Threshold = 100, Severity = "Medium" }
+                ["NET-003"] = new RuleConfig { Enabled = true, Threshold = 200, Severity = "Medium" }
             }
         };
     }
