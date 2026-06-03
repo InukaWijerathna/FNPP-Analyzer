@@ -84,13 +84,11 @@ namespace WinEDR_MVP.Rules.Process
                     context.ProcessCommandLines.TryGetValue(proc.Id, out string? cmdLine);
                     if (string.IsNullOrWhiteSpace(cmdLine)) continue;
 
-                    string cmdLower = cmdLine.ToLower();
-
                     foreach (var pattern in lolPatterns)
                     {
                         bool allMatch = true;
                         foreach (var arg in pattern.TriggerArgs)
-                            if (!cmdLower.Contains(arg, StringComparison.OrdinalIgnoreCase))
+                            if (!cmdLine.Contains(arg, StringComparison.OrdinalIgnoreCase))
                             { allMatch = false; break; }
 
                         if (allMatch)

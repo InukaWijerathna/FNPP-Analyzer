@@ -8,7 +8,7 @@ using WinEDR_MVP.Models;
 
 namespace WinEDR_MVP.Rules.Files
 {
-    // MAL-PE: Scans PE files in untrusted directories for suspicious imported API combinations.
+    // FILE-004: Scans PE files in untrusted directories for suspicious imported API combinations.
     // PE import names are stored as plain ASCII strings, making them detectable via string scan.
     public class PeImportRule : IDetectionRule
     {
@@ -86,18 +86,21 @@ namespace WinEDR_MVP.Rules.Files
             return events;
         }
 
-        private static IEnumerable<DetectionEvent> ScanFile(string path)
+        // Returns a List (not an iterator) so exceptions from one file don't abort the
+        // whole directory scan — the caller's catch only wraps Directory.GetFiles, not each file.
+        private static List<DetectionEvent> ScanFile(string path)
         {
+            var results = new List<DetectionEvent>();
             try
             {
                 var info = new FileInfo(path);
-                if (!info.Exists || info.Length > MaxFileBytes) yield break;
+                if (!info.Exists || info.Length > MaxFileBytes) return results;
 
                 // PE import names are stored as null-terminated ASCII strings — extract all
                 // printable ASCII sequences ≥4 chars (same technique as Unix `strings`)
                 var strings = ExtractStrings(path);
-
                 string fileName = Path.GetFileName(path);
+
                 foreach (var sig in Signatures)
                 {
                     bool allFound = true;
@@ -105,7 +108,7 @@ namespace WinEDR_MVP.Rules.Files
                         if (!strings.Contains(api)) { allFound = false; break; }
 
                     if (allFound)
-                        yield return new DetectionEvent
+                        results.Add(new DetectionEvent
                         {
                             RuleId = "FILE-004",
                             RuleName = $"Suspicious PE Imports: {sig.Name}",
@@ -113,10 +116,11 @@ namespace WinEDR_MVP.Rules.Files
                             Type = sig.Type,
                             Description = $"{fileName} imports APIs associated with {sig.Name}: {string.Join(", ", sig.Required)}",
                             Metadata = new { Path = path, Signature = sig.Name }
-                        };
+                        });
                 }
             }
-            finally { }
+            catch { }
+            return results;
         }
 
         private static HashSet<string> ExtractStrings(string path, int minLen = 4)

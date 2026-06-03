@@ -8,7 +8,7 @@ using WinEDR_MVP.Models;
 
 namespace WinEDR_MVP.Rules.Files
 {
-    // MAL-H: Computes SHA-256 of running process executables and files in untrusted directories,
+    // FILE-003: Computes SHA-256 of running process executables and files in untrusted directories,
     // then compares against a known-bad IOC list.
     // Hashes sourced from public CISA/CERT advisories and VirusTotal reports.
     public class KnownHashRule : IDetectionRule
@@ -57,7 +57,7 @@ namespace WinEDR_MVP.Rules.Files
 
                     string? hash = ComputeSha256(path);
                     if (hash != null && KnownBadHashes.Contains(hash))
-                        events.Add(MakeEvent(proc.ProcessName, path, hash,
+                        events.Add(MakeEvent(
                             $"Running process {proc.ProcessName} matches known malware hash",
                             new { ProcessId = proc.Id, Path = path, SHA256 = hash }));
                 }
@@ -77,7 +77,7 @@ namespace WinEDR_MVP.Rules.Files
                         if (!scanned.Add(file)) continue;
                         string? hash = ComputeSha256(file);
                         if (hash != null && KnownBadHashes.Contains(hash))
-                            events.Add(MakeEvent(Path.GetFileName(file), file, hash,
+                            events.Add(MakeEvent(
                                 $"File matches known malware hash: {Path.GetFileName(file)}",
                                 new { Path = file, SHA256 = hash }));
                     }
@@ -88,8 +88,7 @@ namespace WinEDR_MVP.Rules.Files
             return events;
         }
 
-        private static DetectionEvent MakeEvent(string name, string path, string hash,
-            string desc, object metadata) => new()
+        private static DetectionEvent MakeEvent(string desc, object metadata) => new()
         {
             RuleId = "FILE-003",
             RuleName = "Known Malware Hash",

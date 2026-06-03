@@ -5,7 +5,7 @@ using WinEDR_MVP.Models;
 
 namespace WinEDR_MVP.Rules.Process
 {
-    // HIDS-P4: Office/browser apps spawning shell interpreters — the classic sign of macro
+    // PROC-004: Office/browser apps spawning shell interpreters — the classic sign of macro
     // malware, phishing document exploitation, or browser exploit chains.
     public class ParentChildAnomalyRule : IDetectionRule
     {

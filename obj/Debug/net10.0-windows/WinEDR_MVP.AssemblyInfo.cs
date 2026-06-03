@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("WinEDR_MVP")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+ccee050f5068048919a318fbd12f9046c6951674")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+ed338fd2edfd4199376fb17b8278024e76b0b091")]
 [assembly: System.Reflection.AssemblyProductAttribute("WinEDR_MVP")]
 [assembly: System.Reflection.AssemblyTitleAttribute("WinEDR_MVP")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
