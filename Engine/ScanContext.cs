@@ -8,7 +8,10 @@ namespace WinEDR_MVP.Engine
     {
         public Process[] Processes { get; init; } = [];
         public TcpConnectionInformation[] TcpConnections { get; init; } = [];
+
+        // Keyed by PID — loaded in one WMI query to avoid double round-trips
         public Dictionary<int, string?> ProcessCommandLines { get; init; } = new();
+        public Dictionary<int, int> ParentPids { get; init; } = new();
 
         public void Release()
         {

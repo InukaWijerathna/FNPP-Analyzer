@@ -35,11 +35,19 @@ namespace WinEDR_MVP
             var broker = new AlertBroker("alerts.log");
             var engine = new RuleEngine(broker);
 
+            // Existing HIDS rules
             engine.Register(new SystemProcessMasqueradingRule(config));
             engine.Register(new SuspiciousExecutionRule(config));
             engine.Register(new SuspiciousNetworkActivityRule(config));
             engine.Register(new StartupPersistenceRule());
             engine.Register(new FileScannerRule(config));
+
+            // Malware detection rules
+            engine.Register(new ParentChildAnomalyRule());
+            engine.Register(new LolBinRule());
+            engine.Register(new UnsignedProcessRule(config));
+            engine.Register(new KnownHashRule(config));
+            engine.Register(new PeImportRule(config));
             // ─────────────────────────────────────────────────────────────
 
             Application.Run(new MainForm(engine, broker));

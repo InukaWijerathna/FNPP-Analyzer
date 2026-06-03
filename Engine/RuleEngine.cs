@@ -27,7 +27,6 @@ namespace WinEDR_MVP.Engine
                     try
                     {
                         foreach (var evt in rule.Evaluate(context))
-                        {
                             _sink.Submit(new Alert
                             {
                                 RuleId = evt.RuleId,
@@ -38,7 +37,6 @@ namespace WinEDR_MVP.Engine
                                 SourceProcess = "System",
                                 Metadata = evt.Metadata
                             });
-                        }
                     }
                     catch (Exception ex)
                     {
@@ -52,28 +50,38 @@ namespace WinEDR_MVP.Engine
             }
         }
 
-        private static ScanContext BuildContext() => new()
+        private static ScanContext BuildContext()
         {
-            Processes = Process.GetProcesses(),
-            TcpConnections = IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpConnections(),
-            ProcessCommandLines = LoadCommandLines()
-        };
+            var (cmdLines, parentPids) = LoadProcessDetails();
+            return new ScanContext
+            {
+                Processes = Process.GetProcesses(),
+                TcpConnections = IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpConnections(),
+                ProcessCommandLines = cmdLines,
+                ParentPids = parentPids
+            };
+        }
 
-        private static Dictionary<int, string?> LoadCommandLines()
+        // Single WMI query for both command lines and parent PIDs
+        private static (Dictionary<int, string?> cmdLines, Dictionary<int, int> parentPids) LoadProcessDetails()
         {
-            var result = new Dictionary<int, string?>();
+            var cmdLines = new Dictionary<int, string?>();
+            var parentPids = new Dictionary<int, int>();
             try
             {
                 using var searcher = new ManagementObjectSearcher(
-                    "SELECT ProcessId, CommandLine FROM Win32_Process");
+                    "SELECT ProcessId, ParentProcessId, CommandLine FROM Win32_Process");
                 foreach (ManagementBaseObject obj in searcher.Get())
                 {
-                    result[Convert.ToInt32(obj["ProcessId"])] = obj["CommandLine"]?.ToString();
+                    int pid = Convert.ToInt32(obj["ProcessId"]);
+                    cmdLines[pid] = obj["CommandLine"]?.ToString();
+                    if (obj["ParentProcessId"] != null)
+                        parentPids[pid] = Convert.ToInt32(obj["ParentProcessId"]);
                     obj.Dispose();
                 }
             }
             catch { }
-            return result;
+            return (cmdLines, parentPids);
         }
     }
 }
