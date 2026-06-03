@@ -50,6 +50,10 @@
               "target": "Package",
               "version": "[5.0.0, )"
             },
+            "System.Management": {
+              "target": "Package",
+              "version": "[9.0.0, )"
+            },
             "System.Security.Principal.Windows": {
               "target": "Package",
               "version": "[5.0.0, )"

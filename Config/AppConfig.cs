@@ -6,24 +6,52 @@ namespace WinEDR_MVP.Config
 {
     public class AppConfig
     {
-        public List<string> TrustedSystemProcesses { get; set; } = new List<string>();
-        public List<string> TrustedExecutionPaths { get; set; } = new List<string>();
-        public List<string> UntrustedExecutionPaths { get; set; } = new List<string>();
-        public Dictionary<string, RuleConfig> Rules { get; set; } = new Dictionary<string, RuleConfig>();
+        public List<string> TrustedSystemProcesses { get; set; } = new();
+        public List<string> TrustedExecutionPaths { get; set; } = new();
+        public List<string> UntrustedExecutionPaths { get; set; } = new();
+        public Dictionary<string, RuleConfig> Rules { get; set; } = new();
         public int NetworkScanWindowSeconds { get; set; } = 30;
 
         public static AppConfig Load(string path)
         {
-            if (!File.Exists(path)) return new AppConfig();
+            if (!File.Exists(path)) return CreateDefault();
             var json = File.ReadAllText(path);
-            return JsonSerializer.Deserialize<AppConfig>(json) ?? new AppConfig();
+            return JsonSerializer.Deserialize<AppConfig>(json) ?? CreateDefault();
         }
+
+        public void Save(string path)
+        {
+            File.WriteAllText(path, JsonSerializer.Serialize(this,
+                new JsonSerializerOptions { WriteIndented = true }));
+        }
+
+        public static AppConfig CreateDefault() => new()
+        {
+            TrustedSystemProcesses = ["svchost.exe", "explorer.exe", "lsass.exe", "services.exe", "csrss.exe"],
+            TrustedExecutionPaths =
+            [
+                @"C:\Windows\System32",
+                @"C:\Windows\SysWOW64",
+                @"C:\Program Files",
+                @"C:\Program Files (x86)"
+            ],
+            UntrustedExecutionPaths =
+            [
+                @"%USERPROFILE%\Downloads",
+                @"%USERPROFILE%\AppData\Local\Temp",
+                @"C:\Temp"
+            ],
+            Rules = new Dictionary<string, RuleConfig>
+            {
+                ["HIDS-N3"] = new RuleConfig { Enabled = true, Threshold = 100, Severity = "Medium" }
+            }
+        };
     }
 
     public class RuleConfig
     {
         public bool Enabled { get; set; } = true;
         public int Threshold { get; set; }
-        public string Severity { get; set; }
+        public string? Severity { get; set; }
     }
 }
