@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
-using WinEDR_MVP.Engine;
-using WinEDR_MVP.Models;
+using FNPPScanner.Engine;
+using FNPPScanner.Models;
 
-namespace WinEDR_MVP.Rules.Process
+namespace FNPPScanner.Rules.Process
 {
     // HIDS-P5: Living-Off-the-Land Binary abuse.
     // Detects legitimate Windows tools used to download payloads, execute scripts, or

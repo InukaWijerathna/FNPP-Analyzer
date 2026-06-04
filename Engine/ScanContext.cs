@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Net.NetworkInformation;
 
-namespace WinEDR_MVP.Engine
+namespace FNPPScanner.Engine
 {
     public class ScanContext
     {

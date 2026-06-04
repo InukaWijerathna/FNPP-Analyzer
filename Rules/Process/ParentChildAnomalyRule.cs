@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
-using WinEDR_MVP.Engine;
-using WinEDR_MVP.Models;
+using FNPPScanner.Engine;
+using FNPPScanner.Models;
 
-namespace WinEDR_MVP.Rules.Process
+namespace FNPPScanner.Rules.Process
 {
     // PROC-004: Office/browser apps spawning shell interpreters — the classic sign of macro
     // malware, phishing document exploitation, or browser exploit chains.

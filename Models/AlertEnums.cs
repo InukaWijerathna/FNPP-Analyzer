@@ -1,4 +1,4 @@
-namespace WinEDR_MVP.Models
+namespace FNPPScanner.Models
 {
     public enum AlertSeverity { Low, Medium, High }
 

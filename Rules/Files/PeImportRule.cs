@@ -2,11 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
-using WinEDR_MVP.Config;
-using WinEDR_MVP.Engine;
-using WinEDR_MVP.Models;
+using FNPPScanner.Config;
+using FNPPScanner.Engine;
+using FNPPScanner.Models;
 
-namespace WinEDR_MVP.Rules.Files
+namespace FNPPScanner.Rules.Files
 {
     // FILE-004: Scans PE files in untrusted directories for suspicious imported API combinations.
     // PE import names are stored as plain ASCII strings, making them detectable via string scan.

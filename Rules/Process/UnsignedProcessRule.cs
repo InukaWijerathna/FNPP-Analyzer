@@ -2,11 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
-using WinEDR_MVP.Config;
-using WinEDR_MVP.Engine;
-using WinEDR_MVP.Models;
+using FNPPScanner.Config;
+using FNPPScanner.Engine;
+using FNPPScanner.Models;
 
-namespace WinEDR_MVP.Rules.Process
+namespace FNPPScanner.Rules.Process
 {
     // PROC-006: Detects unsigned executables running from Windows system directories.
     // Uses WinVerifyTrust (Authenticode) — the correct Windows API for signature verification.

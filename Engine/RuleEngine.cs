@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Management;
 using System.Net.NetworkInformation;
-using WinEDR_MVP.Models;
+using FNPPScanner.Models;
 
-namespace WinEDR_MVP.Engine
+namespace FNPPScanner.Engine
 {
     public class RuleEngine
     {
@@ -18,7 +18,6 @@ namespace WinEDR_MVP.Engine
 
         public void RunCycle()
         {
-            Console.WriteLine($"Detection cycle started at {DateTime.Now}");
             var context = BuildContext();
             try
             {
@@ -40,7 +39,7 @@ namespace WinEDR_MVP.Engine
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Rule {rule.RuleId} failed: {ex.Message}");
+                        Console.Error.WriteLine($"[rule:{rule.RuleId}] {ex.Message}");
                     }
                 }
             }

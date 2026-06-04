@@ -1,6 +1,6 @@
 using System;
 
-namespace WinEDR_MVP.Models
+namespace FNPPScanner.Models
 {
     public class Alert
     {

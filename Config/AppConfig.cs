@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 
-namespace WinEDR_MVP.Config
+namespace FNPPScanner.Config
 {
     public class AppConfig
     {

@@ -1,11 +1,11 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.NetworkInformation;
-using WinEDR_MVP.Config;
-using WinEDR_MVP.Engine;
-using WinEDR_MVP.Models;
+using FNPPScanner.Config;
+using FNPPScanner.Engine;
+using FNPPScanner.Models;
 
-namespace WinEDR_MVP.Rules.Network
+namespace FNPPScanner.Rules.Network
 {
     // HIDS-N1/N2/N3/N4: Network anomaly detection.
     public class SuspiciousNetworkActivityRule : IDetectionRule

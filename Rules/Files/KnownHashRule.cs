@@ -2,11 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography;
-using WinEDR_MVP.Config;
-using WinEDR_MVP.Engine;
-using WinEDR_MVP.Models;
+using FNPPScanner.Config;
+using FNPPScanner.Engine;
+using FNPPScanner.Models;
 
-namespace WinEDR_MVP.Rules.Files
+namespace FNPPScanner.Rules.Files
 {
     // FILE-003: Computes SHA-256 of running process executables and files in untrusted directories,
     // then compares against a known-bad IOC list.

@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using WinEDR_MVP.Config;
-using WinEDR_MVP.Engine;
-using WinEDR_MVP.Models;
+using FNPPScanner.Config;
+using FNPPScanner.Engine;
+using FNPPScanner.Models;
 
-namespace WinEDR_MVP.Rules.Files
+namespace FNPPScanner.Rules.Files
 {
     // MAL-F1/F5: File-based indicators in untrusted directories.
     public class FileScannerRule : IDetectionRule

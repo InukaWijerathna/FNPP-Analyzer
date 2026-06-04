@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
-using WinEDR_MVP.Config;
-using WinEDR_MVP.Engine;
-using WinEDR_MVP.Models;
+using FNPPScanner.Config;
+using FNPPScanner.Engine;
+using FNPPScanner.Models;
 
-namespace WinEDR_MVP.Rules.Process
+namespace FNPPScanner.Rules.Process
 {
     // HIDS-P1: Detects system processes running outside their expected paths.
     public class SystemProcessMasqueradingRule : IDetectionRule

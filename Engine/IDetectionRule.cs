@@ -1,7 +1,7 @@
 using System.Collections.Generic;
-using WinEDR_MVP.Models;
+using FNPPScanner.Models;
 
-namespace WinEDR_MVP.Engine
+namespace FNPPScanner.Engine
 {
     public interface IDetectionRule
     {

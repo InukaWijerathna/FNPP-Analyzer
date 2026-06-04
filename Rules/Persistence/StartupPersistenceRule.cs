@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using Microsoft.Win32;
-using WinEDR_MVP.Engine;
-using WinEDR_MVP.Models;
+using FNPPScanner.Engine;
+using FNPPScanner.Models;
 
-namespace WinEDR_MVP.Rules.Persistence
+namespace FNPPScanner.Rules.Persistence
 {
     // HIDS-B1: Suspicious entries in Windows startup registry keys.
     public class StartupPersistenceRule : IDetectionRule

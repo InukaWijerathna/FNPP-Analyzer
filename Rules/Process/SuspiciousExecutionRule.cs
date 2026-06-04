@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
-using WinEDR_MVP.Config;
-using WinEDR_MVP.Engine;
-using WinEDR_MVP.Models;
+using FNPPScanner.Config;
+using FNPPScanner.Engine;
+using FNPPScanner.Models;
 
-namespace WinEDR_MVP.Rules.Process
+namespace FNPPScanner.Rules.Process
 {
     // HIDS-P2/P3: Executables from untrusted paths; script engines running untrusted scripts.
     public class SuspiciousExecutionRule : IDetectionRule

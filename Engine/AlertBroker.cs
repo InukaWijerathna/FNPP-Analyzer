@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
-using WinEDR_MVP.Models;
+using FNPPScanner.Models;
 
-namespace WinEDR_MVP.Engine
+namespace FNPPScanner.Engine
 {
     public class AlertBroker : IAlertSink
     {
