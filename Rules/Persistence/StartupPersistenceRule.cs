@@ -66,30 +66,53 @@ namespace FNPPAnalyzer.Rules.Persistence
             @"C:\Windows\",
         ];
 
+        private static readonly string[] ExeExtensions =
+            [".exe", ".cmd", ".bat", ".ps1", ".vbs", ".js"];
+
+        // Extracts the executable path from a registry Run value.
+        // Registry entries are frequently stored WITHOUT quotes even when the path
+        // contains spaces (e.g. Docker Desktop, IDMan, XMouseButtonControl).
+        // Strategy: if quoted → take between the quotes; if unquoted → try all
+        // token-length prefixes from longest to shortest and return the first one
+        // that ends in a known executable extension.
+        private static string ExtractExePath(string value)
+        {
+            string raw = value.Trim();
+
+            if (raw.StartsWith('"'))
+            {
+                int closing = raw.IndexOf('"', 1);
+                string path = closing > 1 ? raw[1..closing] : raw[1..];
+                return Environment.ExpandEnvironmentVariables(path);
+            }
+
+            string[] tokens = raw.Split(' ');
+            for (int n = tokens.Length; n > 0; n--)
+            {
+                string candidate = string.Join(" ", tokens, 0, n);
+                string ext = Path.GetExtension(candidate).ToLowerInvariant();
+                if (Array.IndexOf(ExeExtensions, ext) >= 0)
+                    return Environment.ExpandEnvironmentVariables(candidate);
+            }
+
+            return Environment.ExpandEnvironmentVariables(tokens[0]);
+        }
+
         private static string? ClassifySuspicious(string value)
         {
-            // Strip surrounding quotes and arguments to isolate the executable path
-            string raw = value.TrimStart('"');
-            int end = raw.IndexOf('"');
-            string exePath = end > 0 ? raw[..end] : raw.Split(' ')[0];
-            exePath = Environment.ExpandEnvironmentVariables(exePath.Trim());
+            string exePath = ExtractExePath(value);
+            if (string.IsNullOrWhiteSpace(exePath)) return null;
 
-            // Flag executables running from temp directories (high confidence)
             if (exePath.Contains(@"\Temp\", StringComparison.OrdinalIgnoreCase))
                 return "runs from Temp";
 
-            // Flag missing executables ONLY if they're outside trusted install paths.
-            // Legitimate software in Program Files may simply be uninstalled with a
-            // stale registry key — not inherently suspicious.
-            if (!string.IsNullOrWhiteSpace(exePath) && !File.Exists(exePath))
+            if (!File.Exists(exePath))
             {
-                bool inTrustedDir = false;
                 foreach (var prefix in TrustedInstallPrefixes)
                     if (exePath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                    { inTrustedDir = true; break; }
+                        return null; // stale entry for uninstalled software — not suspicious
 
-                if (!inTrustedDir)
-                    return "target file not found outside known install paths";
+                return "target executable not found";
             }
 
             return null;

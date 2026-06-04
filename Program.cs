@@ -21,7 +21,12 @@ namespace FNPPAnalyzer
         static AlertBroker?               _broker;
         static PostScanFilter?            _filter;
         static ProcessCreationWatcher?    _watcher;
-        static readonly int ScanInterval = 30;
+        static readonly int               ScanInterval = 30;
+
+        // Held during a manual scan so OnAlertRaised can redraw the progress bar
+        // after writing alert text, preventing the auto-refresh timer from corrupting output.
+        static ProgressContext?           _progressCtx;
+        static readonly object            _consoleLock = new();
 
         static void Main()
         {
@@ -122,43 +127,53 @@ namespace FNPPAnalyzer
 
             FilterResult? result = null;
 
-            // Silence real-time alert popups while the progress bar owns the console.
-            // All new alerts are shown in the summary table after the bar completes.
-            _broker!.AlertRaised -= OnAlertRaised;
-            try
-            {
-                AnsiConsole.Progress()
-                    .AutoClear(true)        // bar disappears when done — no residual bars on repeat scans
-                    .HideCompleted(false)
-                    .Columns(
-                        new TaskDescriptionColumn { Alignment = Justify.Left },
-                        new ProgressBarColumn(),
-                        new PercentageColumn(),
-                        new SpinnerColumn(Spinner.Known.Dots) { Style = new Style(Color.Cyan1) }
-                    )
-                    .Start(ctx =>
+            AnsiConsole.Progress()
+                .AutoClear(true)
+                .AutoRefresh(false)     // we drive refreshes manually so the timer can't race with alert writes
+                .HideCompleted(false)
+                .Columns(
+                    new TaskDescriptionColumn { Alignment = Justify.Left },
+                    new ProgressBarColumn(),
+                    new PercentageColumn(),
+                    new SpinnerColumn(Spinner.Known.Dots) { Style = new Style(Color.Cyan1) }
+                )
+                .Start(ctx =>
+                {
+                    _progressCtx = ctx;
+                    try
                     {
                         var task = ctx.AddTask("[cyan]Initializing...[/]", maxValue: totalSteps);
 
                         var reporter = new Progress<ScanProgress>(p =>
                         {
-                            task.Description = $"[grey][[{p.Completed}/{totalSteps}]][/] [cyan]{Markup.Escape(p.Phase)}[/]";
-                            task.Value       = p.Completed;
+                            lock (_consoleLock)
+                            {
+                                task.Description = $"[grey][[{p.Completed}/{totalSteps}]][/] [cyan]{Markup.Escape(p.Phase)}[/]";
+                                task.Value       = p.Completed;
+                                ctx.Refresh();
+                            }
                         });
 
                         engine.RunCycle(reporter);
 
-                        // Final step: signature verification
-                        task.Description = $"[grey][[{totalSteps - 1}/{totalSteps}]][/] [cyan]Verifying signatures...[/]";
-                        task.Value       = totalSteps - 1;
-                        result           = _filter!.Process(_broker.GetFrom(priorCount));
-                        task.Value       = totalSteps;
-                    });
-            }
-            finally
-            {
-                _broker!.AlertRaised += OnAlertRaised;
-            }
+                        lock (_consoleLock)
+                        {
+                            task.Description = $"[grey][[{totalSteps - 1}/{totalSteps}]][/] [cyan]Verifying signatures...[/]";
+                            task.Value       = totalSteps - 1;
+                            ctx.Refresh();
+                        }
+                        result = _filter!.Process(_broker.GetFrom(priorCount));
+                        lock (_consoleLock)
+                        {
+                            task.Value = totalSteps;
+                            ctx.Refresh();
+                        }
+                    }
+                    finally
+                    {
+                        _progressCtx = null;
+                    }
+                });
 
             ShowFilterSummary(result!);
             Pause();
@@ -351,11 +366,25 @@ namespace FNPPAnalyzer
                 AlertSeverity.Medium => "[yellow]MEDIUM[/]",
                 _                    => "[grey]LOW[/]",
             };
-            AnsiConsole.WriteLine();
-            AnsiConsole.MarkupLine(
-                $"  [bold red]■[/] ALERT  {sev}  [cyan]{Markup.Escape(alert.RuleId)}[/]  [white]{Markup.Escape(alert.Title)}[/]");
-            AnsiConsole.MarkupLine(
-                $"    [grey]{Markup.Escape(alert.Description)}[/]");
+
+            // Truncate description to one terminal-width line so it never wraps —
+            // a wrapped line throws off Spectre.Console's cursor-position math and
+            // causes the progress bar to overprint the alert text.
+            string desc = alert.Description;
+            if (desc.Length > 110) desc = desc[..107] + "…";
+
+            lock (_consoleLock)
+            {
+                AnsiConsole.WriteLine();
+                AnsiConsole.MarkupLine(
+                    $"  [bold red]■[/] ALERT  {sev}  [cyan]{Markup.Escape(alert.RuleId)}[/]  [white]{Markup.Escape(alert.Title)}[/]");
+                AnsiConsole.MarkupLine(
+                    $"    [grey]{Markup.Escape(desc)}[/]");
+
+                // If a progress bar is active, redraw it immediately after the alert
+                // so it reappears below the new text rather than on top of it.
+                _progressCtx?.Refresh();
+            }
         }
 
         // ── Banner & chrome ───────────────────────────────────────────────────

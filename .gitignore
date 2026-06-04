@@ -24,6 +24,8 @@ packages/
 # ── Runtime-generated files ───────────────────────────────────────────────────
 alerts.log
 whitelist.json
+config.json
+iocs.json
 *.log
 
 # ── IDE ───────────────────────────────────────────────────────────────────────
