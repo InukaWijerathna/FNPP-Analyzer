@@ -1,6 +1,6 @@
 using System;
 
-namespace FNPPScanner.Models
+namespace FNPPAnalyzer.Models
 {
     public class Alert
     {

@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
-using FNPPScanner.Config;
-using FNPPScanner.Engine;
-using FNPPScanner.Models;
+using FNPPAnalyzer.Config;
+using FNPPAnalyzer.Engine;
+using FNPPAnalyzer.Models;
 
-namespace FNPPScanner.Rules.Process
+namespace FNPPAnalyzer.Rules.Process
 {
     // HIDS-P1: Detects system processes running outside their expected paths.
     public class SystemProcessMasqueradingRule : IDetectionRule

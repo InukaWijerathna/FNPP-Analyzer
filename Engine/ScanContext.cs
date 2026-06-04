@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Net.NetworkInformation;
 
-namespace FNPPScanner.Engine
+namespace FNPPAnalyzer.Engine
 {
     public class ScanContext
     {

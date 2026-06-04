@@ -2,11 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
-using FNPPScanner.Config;
-using FNPPScanner.Engine;
-using FNPPScanner.Models;
+using FNPPAnalyzer.Config;
+using FNPPAnalyzer.Engine;
+using FNPPAnalyzer.Models;
 
-namespace FNPPScanner.Rules.Files
+namespace FNPPAnalyzer.Rules.Files
 {
     // FILE-004: Scans PE files in untrusted directories for suspicious imported API combinations.
     // PE import names are stored as plain ASCII strings, making them detectable via string scan.

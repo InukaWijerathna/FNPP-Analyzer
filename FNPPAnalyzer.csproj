@@ -5,8 +5,8 @@
     <TargetFramework>net10.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AssemblyName>FNPPScanner</AssemblyName>
-    <RootNamespace>FNPPScanner</RootNamespace>
+    <AssemblyName>FNPPAnalyzer</AssemblyName>
+    <RootNamespace>FNPPAnalyzer</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 

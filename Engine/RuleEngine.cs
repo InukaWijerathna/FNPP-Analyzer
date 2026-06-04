@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Management;
 using System.Net.NetworkInformation;
-using FNPPScanner.Models;
+using FNPPAnalyzer.Models;
 
-namespace FNPPScanner.Engine
+namespace FNPPAnalyzer.Engine
 {
     public class RuleEngine
     {

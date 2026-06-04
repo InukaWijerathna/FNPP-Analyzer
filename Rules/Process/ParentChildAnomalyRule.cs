@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
-using FNPPScanner.Engine;
-using FNPPScanner.Models;
+using FNPPAnalyzer.Engine;
+using FNPPAnalyzer.Models;
 
-namespace FNPPScanner.Rules.Process
+namespace FNPPAnalyzer.Rules.Process
 {
     // PROC-004: Office/browser apps spawning shell interpreters — the classic sign of macro
     // malware, phishing document exploitation, or browser exploit chains.

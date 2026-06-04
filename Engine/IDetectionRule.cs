@@ -1,7 +1,7 @@
 using System.Collections.Generic;
-using FNPPScanner.Models;
+using FNPPAnalyzer.Models;
 
-namespace FNPPScanner.Engine
+namespace FNPPAnalyzer.Engine
 {
     public interface IDetectionRule
     {

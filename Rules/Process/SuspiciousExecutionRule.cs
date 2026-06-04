@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
-using FNPPScanner.Config;
-using FNPPScanner.Engine;
-using FNPPScanner.Models;
+using FNPPAnalyzer.Config;
+using FNPPAnalyzer.Engine;
+using FNPPAnalyzer.Models;
 
-namespace FNPPScanner.Rules.Process
+namespace FNPPAnalyzer.Rules.Process
 {
     // HIDS-P2/P3: Executables from untrusted paths; script engines running untrusted scripts.
     public class SuspiciousExecutionRule : IDetectionRule

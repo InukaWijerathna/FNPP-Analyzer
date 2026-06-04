@@ -2,11 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
-using FNPPScanner.Config;
-using FNPPScanner.Engine;
-using FNPPScanner.Models;
+using FNPPAnalyzer.Config;
+using FNPPAnalyzer.Engine;
+using FNPPAnalyzer.Models;
 
-namespace FNPPScanner.Rules.Process
+namespace FNPPAnalyzer.Rules.Process
 {
     // PROC-006: Detects unsigned executables running from Windows system directories.
     // Uses WinVerifyTrust (Authenticode) — the correct Windows API for signature verification.

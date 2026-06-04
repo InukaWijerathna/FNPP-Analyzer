@@ -1,11 +1,11 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.NetworkInformation;
-using FNPPScanner.Config;
-using FNPPScanner.Engine;
-using FNPPScanner.Models;
+using FNPPAnalyzer.Config;
+using FNPPAnalyzer.Engine;
+using FNPPAnalyzer.Models;
 
-namespace FNPPScanner.Rules.Network
+namespace FNPPAnalyzer.Rules.Network
 {
     // HIDS-N1/N2/N3/N4: Network anomaly detection.
     public class SuspiciousNetworkActivityRule : IDetectionRule

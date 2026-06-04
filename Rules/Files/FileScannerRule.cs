@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using FNPPScanner.Config;
-using FNPPScanner.Engine;
-using FNPPScanner.Models;
+using FNPPAnalyzer.Config;
+using FNPPAnalyzer.Engine;
+using FNPPAnalyzer.Models;
 
-namespace FNPPScanner.Rules.Files
+namespace FNPPAnalyzer.Rules.Files
 {
     // MAL-F1/F5: File-based indicators in untrusted directories.
     public class FileScannerRule : IDetectionRule

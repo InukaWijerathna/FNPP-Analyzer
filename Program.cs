@@ -3,15 +3,15 @@ using System.Runtime.InteropServices;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
-using FNPPScanner.Config;
-using FNPPScanner.Engine;
-using FNPPScanner.Models;
-using FNPPScanner.Rules.Files;
-using FNPPScanner.Rules.Network;
-using FNPPScanner.Rules.Persistence;
-using FNPPScanner.Rules.Process;
+using FNPPAnalyzer.Config;
+using FNPPAnalyzer.Engine;
+using FNPPAnalyzer.Models;
+using FNPPAnalyzer.Rules.Files;
+using FNPPAnalyzer.Rules.Network;
+using FNPPAnalyzer.Rules.Persistence;
+using FNPPAnalyzer.Rules.Process;
 
-namespace FNPPScanner
+namespace FNPPAnalyzer
 {
     static class Program
     {
@@ -83,7 +83,7 @@ namespace FNPPScanner
                         StopContinuous();
                         _scanTask?.Wait(2000);
                         Console.WriteLine();
-                        Info("Shutting down FNPP Scanner. Stay safe.");
+                        Info("Shutting down FNPP Analyzer. Stay safe.");
                         Console.WriteLine();
                         return;
                     default:
@@ -204,8 +204,7 @@ namespace FNPPScanner
             WriteColor("   ██╔══╝  ██║╚██╗██║██╔═══╝ ██╔═══╝ \n", ConsoleColor.Cyan);
             WriteColor("   ██║     ██║ ╚████║██║     ██║     \n", ConsoleColor.Cyan);
             WriteColor("   ╚═╝     ╚═╝  ╚═══╝╚═╝     ╚═╝     \n", ConsoleColor.Cyan);
-            WriteColor("                S C A N N E R\n", ConsoleColor.White);
-            WriteColor("      Endpoint Detection & Response  v1.0\n", ConsoleColor.DarkGray);
+            WriteColor("              A N A L Y Z E R\n", ConsoleColor.White);
             Console.ResetColor();
             Console.WriteLine();
             Separator();

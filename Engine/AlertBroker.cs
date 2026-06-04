@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
-using FNPPScanner.Models;
+using FNPPAnalyzer.Models;
 
-namespace FNPPScanner.Engine
+namespace FNPPAnalyzer.Engine
 {
     public class AlertBroker : IAlertSink
     {

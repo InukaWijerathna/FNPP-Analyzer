@@ -1,4 +1,4 @@
-namespace FNPPScanner.Models
+namespace FNPPAnalyzer.Models
 {
     public class DetectionEvent
     {

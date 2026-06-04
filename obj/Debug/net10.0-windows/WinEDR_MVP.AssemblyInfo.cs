@@ -10,12 +10,12 @@
 using System;
 using System.Reflection;
 
-[assembly: System.Reflection.AssemblyCompanyAttribute("FNPPScanner")]
+[assembly: System.Reflection.AssemblyCompanyAttribute("FNPPAnalyzer")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
 [assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+0285d97adb738fb418d86bb8961cb8935d13b438")]
-[assembly: System.Reflection.AssemblyProductAttribute("FNPPScanner")]
-[assembly: System.Reflection.AssemblyTitleAttribute("FNPPScanner")]
+[assembly: System.Reflection.AssemblyProductAttribute("FNPPAnalyzer")]
+[assembly: System.Reflection.AssemblyTitleAttribute("FNPPAnalyzer")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
 [assembly: System.Runtime.Versioning.TargetPlatformAttribute("Windows7.0")]
 [assembly: System.Runtime.Versioning.SupportedOSPlatformAttribute("Windows7.0")]
