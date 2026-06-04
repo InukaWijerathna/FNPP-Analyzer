@@ -39,12 +39,13 @@ namespace FNPPAnalyzer.Rules.Files
                             file.EndsWith(".txt.js",  StringComparison.OrdinalIgnoreCase))
                             events.Add(new DetectionEvent
                             {
-                                RuleId = "FILE-001",
-                                RuleName = "Double Extension File",
-                                Severity = AlertSeverity.High,
-                                Type = AlertType.MAL,
-                                Description = $"Double extension detected: {info.Name}",
-                                Metadata = new { Path = file }
+                                RuleId         = "FILE-001",
+                                RuleName       = "Double Extension File",
+                                Severity       = AlertSeverity.High,
+                                Type           = AlertType.MAL,
+                                Description    = $"Double extension detected: {info.Name}",
+                                ExecutablePath = file,
+                                Metadata       = new { Path = file }
                             });
 
                         // MAL-F5: Hidden executable
@@ -53,12 +54,13 @@ namespace FNPPAnalyzer.Rules.Files
                              file.EndsWith(".ps1", StringComparison.OrdinalIgnoreCase)))
                             events.Add(new DetectionEvent
                             {
-                                RuleId = "FILE-002",
-                                RuleName = "Hidden Executable",
-                                Severity = AlertSeverity.Medium,
-                                Type = AlertType.MAL,
-                                Description = $"Hidden executable found: {info.Name}",
-                                Metadata = new { Path = file }
+                                RuleId         = "FILE-002",
+                                RuleName       = "Hidden Executable",
+                                Severity       = AlertSeverity.Medium,
+                                Type           = AlertType.MAL,
+                                Description    = $"Hidden executable found: {info.Name}",
+                                ExecutablePath = file,
+                                Metadata       = new { Path = file }
                             });
                     }
                 }

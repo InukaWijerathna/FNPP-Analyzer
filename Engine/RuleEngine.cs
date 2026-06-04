@@ -28,13 +28,14 @@ namespace FNPPAnalyzer.Engine
                         foreach (var evt in rule.Evaluate(context))
                             _sink.Submit(new Alert
                             {
-                                RuleId = evt.RuleId,
-                                Title = evt.RuleName,
-                                Description = evt.Description,
-                                Severity = evt.Severity,
-                                Type = evt.Type,
-                                SourceProcess = "System",
-                                Metadata = evt.Metadata
+                                RuleId         = evt.RuleId,
+                                Title          = evt.RuleName,
+                                Description    = evt.Description,
+                                Severity       = evt.Severity,
+                                Type           = evt.Type,
+                                SourceProcess  = "System",
+                                ExecutablePath = evt.ExecutablePath,
+                                Metadata       = evt.Metadata
                             });
                     }
                     catch (Exception ex)

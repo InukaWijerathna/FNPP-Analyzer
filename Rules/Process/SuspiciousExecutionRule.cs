@@ -58,12 +58,13 @@ namespace FNPPAnalyzer.Rules.Process
                         {
                             events.Add(new DetectionEvent
                             {
-                                RuleId = "PROC-002",
-                                RuleName = "Executable from Untrusted Path",
-                                Severity = AlertSeverity.Medium,
-                                Type = AlertType.MAL,
-                                Description = $"{proc.ProcessName} running from untrusted path: {exePath}",
-                                Metadata = new { ProcessId = proc.Id, Path = exePath }
+                                RuleId         = "PROC-002",
+                                RuleName       = "Executable from Untrusted Path",
+                                Severity       = AlertSeverity.Medium,
+                                Type           = AlertType.MAL,
+                                Description    = $"{proc.ProcessName} running from untrusted path: {exePath}",
+                                ExecutablePath = exePath,
+                                Metadata       = new { ProcessId = proc.Id, Path = exePath }
                             });
                         }
                     }

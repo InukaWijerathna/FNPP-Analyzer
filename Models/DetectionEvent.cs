@@ -7,6 +7,7 @@ namespace FNPPAnalyzer.Models
         public AlertSeverity Severity { get; init; }
         public AlertType Type { get; init; }
         public string Description { get; init; } = string.Empty;
+        public string ExecutablePath { get; init; } = string.Empty;
         public object? Metadata { get; init; }
     }
 }

@@ -1,0 +1,101 @@
+# FNPP Analyzer
+
+A Windows endpoint detection and response (EDR) tool that monitors running processes, network connections, file activity, and registry persistence for malicious behaviour. Runs entirely in the terminal with an interactive TUI.
+
+```
+╔══════════════════════════════════════════════════╗
+║   ███████╗███╗   ██╗██████╗ ██████╗              ║
+║   ██╔════╝████╗  ██║██╔══██╗██╔══██╗             ║
+║   █████╗  ██╔██╗ ██║██████╔╝██████╔╝             ║
+║   ██╔══╝  ██║╚██╗██║██╔═══╝ ██╔═══╝              ║
+║   ██║     ██║ ╚████║██║     ██║                  ║
+║   ╚═╝     ╚═╝  ╚═══╝╚═╝     ╚═╝                  ║
+║             A N A L Y Z E R                      ║
+╚══════════════════════════════════════════════════╝
+```
+
+## Requirements
+
+- Windows 10/11
+- [.NET 10 SDK](https://dotnet.microsoft.com/download)
+- Administrator privileges (recommended for full process inspection)
+
+## Build & Run
+
+```powershell
+git clone https://github.com/your-username/Process-and-file-Analyser-demo
+cd Process-and-file-Analyser-demo
+
+dotnet build FNPPAnalyzer.csproj
+dotnet run --project FNPPAnalyzer.csproj
+```
+
+Or build a standalone executable:
+
+```powershell
+dotnet publish FNPPAnalyzer.csproj -c Release -r win-x64 --self-contained
+```
+
+> Run as Administrator for full `SeDebugPrivilege` access. Without it, some process details (command lines, parent PIDs) may be unavailable.
+
+## Interface
+
+Navigation is via arrow keys and Enter. No typing required.
+
+```
+  FNPP Analyzer  IDLE  │  Alerts: 0  │  Log: alerts.log
+
+──────────────────── Main Menu ────────────────────
+? Select an option:
+  > 1.  Scan Now        (run a single detection cycle)
+    2.  Live Monitor    (start continuous scanning)
+    3.  Stop Monitor    (stop continuous scanning)
+    4.  Alerts          (view all recorded alerts)
+    5.  Status          (scanner state & statistics)
+    6.  Clear
+    7.  Quit
+```
+
+| Command | Description |
+|---|---|
+| Scan Now | Runs one detection pass immediately |
+| Live Monitor | Starts background scanning on a 30-second interval |
+| Stop Monitor | Cancels the background scan |
+| Alerts | Shows all recorded alerts in a table |
+| Status | Shows scanner state, interval, and alert count |
+
+## Detection Rules
+
+| Rule ID | Category | What it detects |
+|---|---|---|
+| PROC-001 | Process | System process name masquerading (e.g. `svchost` from wrong path) |
+| PROC-002 | Process | Execution from suspicious paths (Temp, Downloads, AppData) |
+| PROC-003 | Process | Anomalous parent–child process relationships |
+| PROC-004 | Process | Unsigned or untrusted process binaries |
+| PROC-005 | Process | Living-off-the-land binary (LOLBin) abuse |
+| NET-001 | Network | Connections to suspicious ports or high-entropy destinations |
+| FILE-001 | File | Known malicious file hashes |
+| FILE-002 | File | Suspicious PE import table entries |
+| FILE-003 | File | General file-based indicators |
+| PERSIST-001 | Persistence | Startup registry / scheduled task persistence |
+
+## Alerts
+
+Alerts are deduplicated and written to `alerts.log` (one JSON object per line) in the working directory. They also appear inline in the terminal as they fire during live monitoring.
+
+Severity levels: `HIGH` · `MEDIUM` · `LOW`
+
+## Configuration
+
+On first run, a `config.json` is generated with default values. Edit it to customise trusted process names, execution paths, and per-rule thresholds/severity overrides.
+
+```json
+{
+  "TrustedSystemProcesses": ["svchost.exe", "explorer.exe", ...],
+  "TrustedExecutionPaths":  ["C:\\Windows\\System32", ...],
+  "UntrustedExecutionPaths": ["Downloads", "Temp", ...],
+  "Rules": {
+    "PROC-001": { "Enabled": true, "Severity": "High" }
+  }
+}
+```

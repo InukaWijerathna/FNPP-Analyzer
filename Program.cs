@@ -10,6 +10,7 @@ using FNPPAnalyzer.Rules.Files;
 using FNPPAnalyzer.Rules.Network;
 using FNPPAnalyzer.Rules.Persistence;
 using FNPPAnalyzer.Rules.Process;
+using Spectre.Console;
 
 namespace FNPPAnalyzer
 {
@@ -18,24 +19,26 @@ namespace FNPPAnalyzer
         static CancellationTokenSource? _cts;
         static Task? _scanTask;
         static AlertBroker? _broker;
+        static PostScanFilter? _filter;
         static readonly int ScanInterval = 30;
 
         static void Main()
         {
             Console.OutputEncoding = System.Text.Encoding.UTF8;
-            Console.CursorVisible = false;
 
             PrintBanner();
 
             if (!EnableSeDebugPrivilege())
-                Warn("SeDebugPrivilege unavailable — run as Administrator for full inspection.");
+                AnsiConsole.MarkupLine("[yellow]  [[!]] SeDebugPrivilege unavailable — run as Administrator for full inspection.[/]");
 
             const string configPath = "config.json";
             var config = AppConfig.Load(configPath);
             if (!System.IO.File.Exists(configPath))
                 config.Save(configPath);
 
-            _broker = new AlertBroker("alerts.log");
+            var whitelist = new SignatureWhitelist("whitelist.json");
+            _broker  = new AlertBroker("alerts.log", whitelist);
+            _filter  = new PostScanFilter(whitelist);
             var engine = new RuleEngine(_broker);
 
             engine.Register(new SystemProcessMasqueradingRule(config));
@@ -51,208 +54,311 @@ namespace FNPPAnalyzer
 
             _broker.AlertRaised += OnAlertRaised;
 
-            PrintHelp();
-            CommandLoop(engine);
+            MenuLoop(engine);
         }
 
-        // ── Command loop ──────────────────────────────────────────────────────
+        // ── Menu ─────────────────────────────────────────────────────────────
 
-        static void CommandLoop(RuleEngine engine)
+        static void MenuLoop(RuleEngine engine)
         {
             while (true)
             {
-                Prompt();
-                Console.CursorVisible = true;
-                string? input = Console.ReadLine()?.Trim().ToLowerInvariant();
-                Console.CursorVisible = false;
+                StatusBar();
+                AnsiConsole.Write(new Rule("[bold cyan]Main Menu[/]").RuleStyle("grey"));
 
-                switch (input)
+                var choice = AnsiConsole.Prompt(
+                    new SelectionPrompt<string>()
+                        .Title("[grey]Select an option:[/]")
+                        .HighlightStyle(new Style(Color.Cyan1, decoration: Decoration.Bold))
+                        .AddChoices(
+                            "1.  Scan Now        (run a single detection cycle)",
+                            "2.  Live Monitor    (start continuous scanning)",
+                            "3.  Stop Monitor    (stop continuous scanning)",
+                            "4.  Alerts          (view all recorded alerts)",
+                            "5.  Status          (scanner state & statistics)",
+                            "6.  Clear           (clear screen & redraw banner)",
+                            "7.  Quit"
+                        ));
+
+                switch (choice[0])
                 {
-                    case "scan":   RunSingleScan(engine);  break;
-                    case "start":  StartContinuous(engine); break;
-                    case "stop":   StopContinuous();        break;
-                    case "alerts": ShowAlerts();             break;
-                    case "status": ShowStatus();             break;
-                    case "clear":
-                        Console.Clear();
-                        PrintBanner();
-                        break;
-                    case "help":   PrintHelp(); break;
-                    case "exit":
-                    case "quit":
-                        StopContinuous();
+                    case '1': ScanView(engine);          break;
+                    case '2': StartMonitorView(engine);   break;
+                    case '3': StopMonitorView();          break;
+                    case '4': AlertsView();               break;
+                    case '5': StatusView();               break;
+                    case '6': AnsiConsole.Clear(); PrintBanner(); break;
+                    case '7':
+                        StopMonitor();
                         _scanTask?.Wait(2000);
-                        Console.WriteLine();
-                        Info("Shutting down FNPP Analyzer. Stay safe.");
-                        Console.WriteLine();
+                        AnsiConsole.WriteLine();
+                        AnsiConsole.MarkupLine("[cyan]  Shutting down FNPP Analyzer. Stay safe.[/]");
+                        AnsiConsole.WriteLine();
                         return;
-                    default:
-                        if (!string.IsNullOrEmpty(input))
-                            WriteColor($"  Unknown command '{input}'. Type 'help' for available commands.\n",
-                                ConsoleColor.DarkGray);
-                        break;
                 }
             }
         }
 
-        // ── Scan actions ──────────────────────────────────────────────────────
+        // ── Scan views ────────────────────────────────────────────────────────
 
-        static void RunSingleScan(RuleEngine engine)
+        static void ScanView(RuleEngine engine)
         {
-            Info("Running single detection cycle...");
-            engine.RunCycle();
-            Ok("Scan complete.");
+            AnsiConsole.WriteLine();
+            AnsiConsole.Write(new Rule("[bold cyan]Detection Scan[/]").RuleStyle("grey"));
+
+            int priorCount = _broker!.GetAll().Count;
+
+            AnsiConsole.Status()
+                .Spinner(Spinner.Known.Dots)
+                .SpinnerStyle(new Style(Color.Cyan1))
+                .Start("[cyan]Running detection cycle...[/]", ctx =>
+                {
+                    engine.RunCycle();
+                    ctx.Status("[cyan]Verifying signatures...[/]");
+                    var newAlerts = _broker.GetFrom(priorCount);
+                    _filter!.Process(newAlerts);
+                });
+
+            var result = _filter!.Process(_broker.GetFrom(priorCount));
+            ShowFilterSummary(result);
+            Pause();
         }
 
-        static void StartContinuous(RuleEngine engine)
+        static void StartMonitorView(RuleEngine engine)
         {
+            AnsiConsole.WriteLine();
+            AnsiConsole.Write(new Rule("[bold cyan]Live Monitor[/]").RuleStyle("grey"));
+
             if (_scanTask != null && !_scanTask.IsCompleted)
             {
-                Warn("Scanner is already running.");
+                AnsiConsole.MarkupLine("[yellow]  [[!]] Monitor is already running.[/]");
+                Pause();
                 return;
             }
+
             _cts = new CancellationTokenSource();
             var token = _cts.Token;
             _scanTask = Task.Run(async () =>
             {
-                Ok($"Continuous scan started (interval: {ScanInterval}s).");
                 while (!token.IsCancellationRequested)
                 {
+                    int prior = _broker!.GetAll().Count;
                     engine.RunCycle();
+                    _filter!.Process(_broker.GetFrom(prior));
+
                     try { await Task.Delay(ScanInterval * 1000, token); }
                     catch (OperationCanceledException) { break; }
                 }
-                WriteColor("  [-] Scan stopped.\n", ConsoleColor.DarkGray);
             }, token);
+
+            AnsiConsole.MarkupLine($"[green]  [[+]] Live monitor started — scanning every {ScanInterval}s.[/]");
+            AnsiConsole.MarkupLine("[grey]  Signed binaries are auto-whitelisted. Alerts appear in real time.[/]");
+            Pause();
         }
 
-        static void StopContinuous()
+        static void StopMonitorView()
+        {
+            AnsiConsole.WriteLine();
+            AnsiConsole.Write(new Rule("[bold cyan]Stop Monitor[/]").RuleStyle("grey"));
+            StopMonitor();
+            Pause();
+        }
+
+        static void StopMonitor()
         {
             if (_cts == null || _cts.IsCancellationRequested)
+                AnsiConsole.MarkupLine("[grey]  No active monitor to stop.[/]");
+            else
             {
-                WriteColor("  No active scan running.\n", ConsoleColor.DarkGray);
-                return;
+                _cts.Cancel();
+                AnsiConsole.MarkupLine("[yellow]  [[-]] Monitor stopped.[/]");
             }
-            _cts.Cancel();
-            Warn("Stopping scanner...");
         }
 
-        // ── Display ───────────────────────────────────────────────────────────
+        // ── Filter summary ────────────────────────────────────────────────────
 
-        static void ShowAlerts()
+        static void ShowFilterSummary(FilterResult result)
+        {
+            if (result.Visible.Count == 0 && result.Suppressed.Count == 0)
+            {
+                AnsiConsole.MarkupLine("[grey]  No new findings this cycle.[/]");
+                return;
+            }
+
+            AnsiConsole.WriteLine();
+            AnsiConsole.Write(new Rule("[bold cyan]Scan Results[/]").RuleStyle("grey"));
+
+            if (result.Visible.Count > 0)
+            {
+                var table = new Table()
+                    .BorderColor(Color.Grey)
+                    .Border(TableBorder.Simple)
+                    .AddColumn(new TableColumn("[grey]Time[/]").Centered())
+                    .AddColumn(new TableColumn("[grey]Severity[/]").Centered())
+                    .AddColumn(new TableColumn("[grey]Rule[/]"))
+                    .AddColumn(new TableColumn("[white]Title[/]"))
+                    .AddColumn(new TableColumn("[grey]Description[/]"));
+
+                foreach (var a in result.Visible)
+                {
+                    string sev = a.Severity switch
+                    {
+                        AlertSeverity.High   => "[red bold]HIGH[/]",
+                        AlertSeverity.Medium => "[yellow]MEDIUM[/]",
+                        _                    => "[grey]LOW[/]",
+                    };
+                    table.AddRow(
+                        $"[grey]{a.Timestamp.ToLocalTime():HH:mm:ss}[/]",
+                        sev,
+                        $"[cyan]{Markup.Escape(a.RuleId)}[/]",
+                        $"[white]{Markup.Escape(a.Title)}[/]",
+                        $"[grey]{Markup.Escape(a.Description)}[/]"
+                    );
+                }
+                AnsiConsole.Write(table);
+            }
+
+            if (result.Suppressed.Count > 0)
+                AnsiConsole.MarkupLine(
+                    $"[grey]  {result.Suppressed.Count} alert(s) suppressed — Authenticode-signed binaries.[/]");
+
+            if (result.NewlyWhitelisted.Count > 0)
+            {
+                AnsiConsole.MarkupLine($"[green]  [[+]] {result.NewlyWhitelisted.Count} path(s) added to whitelist:[/]");
+                foreach (var p in result.NewlyWhitelisted)
+                    AnsiConsole.MarkupLine($"[grey]       {Markup.Escape(p)}[/]");
+            }
+        }
+
+        // ── Info views ────────────────────────────────────────────────────────
+
+        static void AlertsView()
         {
             var alerts = _broker!.GetAll();
-            Console.WriteLine();
-            Separator();
-            WriteColor($"  ALERTS  ({alerts.Count} total)\n", ConsoleColor.White);
-            Separator();
+            AnsiConsole.WriteLine();
+            AnsiConsole.Write(new Rule($"[bold white]Alerts[/]  [grey]{alerts.Count} recorded[/]").RuleStyle("grey"));
 
             if (alerts.Count == 0)
             {
-                WriteColor("  No alerts recorded.\n", ConsoleColor.DarkGray);
+                AnsiConsole.MarkupLine("[grey]  No alerts recorded.[/]");
+                Pause();
+                return;
             }
-            else
+
+            var table = new Table()
+                .BorderColor(Color.Grey)
+                .Border(TableBorder.Simple)
+                .AddColumn(new TableColumn("[grey]Time[/]").Centered())
+                .AddColumn(new TableColumn("[grey]Severity[/]").Centered())
+                .AddColumn(new TableColumn("[grey]Rule[/]"))
+                .AddColumn(new TableColumn("[white]Title[/]"))
+                .AddColumn(new TableColumn("[grey]Description[/]"));
+
+            foreach (var a in alerts)
             {
-                foreach (var a in alerts)
+                string sev = a.Severity switch
                 {
-                    var sev = SevColor(a.Severity);
-                    WriteColor($"  {a.Timestamp.ToLocalTime():HH:mm:ss}  ", ConsoleColor.DarkGray);
-                    WriteColor($"{a.Severity,-6}  ", sev);
-                    WriteColor($"{a.RuleId,-10}  ", ConsoleColor.DarkCyan);
-                    WriteColor($"{a.Title}\n", ConsoleColor.White);
-                    WriteColor($"  {"",24}{a.Description}\n", ConsoleColor.Gray);
-                }
+                    AlertSeverity.High   => "[red bold]HIGH[/]",
+                    AlertSeverity.Medium => "[yellow]MEDIUM[/]",
+                    _                    => "[grey]LOW[/]",
+                };
+                string title = a.Suppressed
+                    ? $"[grey]{Markup.Escape(a.Title)} [dim](whitelisted)[/][/]"
+                    : $"[white]{Markup.Escape(a.Title)}[/]";
+
+                table.AddRow(
+                    $"[grey]{a.Timestamp.ToLocalTime():HH:mm:ss}[/]",
+                    a.Suppressed ? "[grey]------[/]" : sev,
+                    $"[cyan]{Markup.Escape(a.RuleId)}[/]",
+                    title,
+                    $"[grey]{Markup.Escape(a.Description)}[/]"
+                );
             }
-            Separator();
+
+            AnsiConsole.Write(table);
+            Pause();
         }
 
-        static void ShowStatus()
+        static void StatusView()
         {
             bool running = _scanTask != null && !_scanTask.IsCompleted;
-            Console.WriteLine();
-            Separator();
-            WriteColor("  STATUS\n", ConsoleColor.White);
-            Separator();
-            WriteColor("  Scanner   : ", ConsoleColor.DarkGray);
-            WriteColor(running ? "RUNNING\n" : "STOPPED\n",
-                running ? ConsoleColor.Green : ConsoleColor.Red);
-            WriteColor($"  Interval  : {ScanInterval}s\n", ConsoleColor.DarkGray);
-            WriteColor($"  Alerts    : {_broker!.GetAll().Count} recorded\n", ConsoleColor.DarkGray);
-            WriteColor($"  Log file  : alerts.log\n", ConsoleColor.DarkGray);
-            Separator();
+            AnsiConsole.WriteLine();
+            AnsiConsole.Write(new Rule("[bold white]Status[/]").RuleStyle("grey"));
+
+            var grid = new Grid()
+                .AddColumn(new GridColumn().Width(16))
+                .AddColumn(new GridColumn());
+
+            grid.AddRow("[grey]Monitor    [/]", running ? "[green]RUNNING[/]" : "[red]STOPPED[/]");
+            grid.AddRow("[grey]Interval   [/]", $"[white]{ScanInterval}s[/]");
+            grid.AddRow("[grey]Alerts     [/]", $"[white]{_broker!.GetAll().Count} recorded[/]");
+            grid.AddRow("[grey]Log        [/]", "[white]alerts.log[/]");
+            grid.AddRow("[grey]Whitelist  [/]", "[white]whitelist.json[/]");
+
+            AnsiConsole.Write(new Padder(grid).Padding(2, 0));
+            Pause();
         }
+
+        // ── Live alert display ────────────────────────────────────────────────
 
         static void OnAlertRaised(Alert alert)
         {
-            var col = SevColor(alert.Severity);
-            Console.WriteLine();
-            WriteColor($"  [ALERT]  ", col);
-            WriteColor($"{alert.Severity,-6}  ", col);
-            WriteColor($"{alert.RuleId,-10}  ", ConsoleColor.DarkCyan);
-            WriteColor($"{alert.Title}\n", ConsoleColor.White);
-            WriteColor($"  {"",24}{alert.Description}\n", ConsoleColor.DarkGray);
-            Prompt();
+            if (alert.Suppressed) return;
+
+            string sev = alert.Severity switch
+            {
+                AlertSeverity.High   => "[red bold]HIGH[/]",
+                AlertSeverity.Medium => "[yellow]MEDIUM[/]",
+                _                    => "[grey]LOW[/]",
+            };
+            AnsiConsole.WriteLine();
+            AnsiConsole.MarkupLine(
+                $"  [bold red]■[/] ALERT  {sev}  [cyan]{Markup.Escape(alert.RuleId)}[/]  [white]{Markup.Escape(alert.Title)}[/]");
+            AnsiConsole.MarkupLine(
+                $"    [grey]{Markup.Escape(alert.Description)}[/]");
+        }
+
+        // ── Banner & chrome ───────────────────────────────────────────────────
+
+        static void StatusBar()
+        {
+            bool running = _scanTask != null && !_scanTask.IsCompleted;
+            int count = _broker?.GetAll().Count ?? 0;
+            string state = running ? "[green]MONITORING[/]" : "[grey]IDLE[/]";
+            AnsiConsole.MarkupLine($"[grey]  FNPP Analyzer  [/]{state}[grey]  │  Alerts: {count}  │  Log: alerts.log[/]");
+            AnsiConsole.WriteLine();
         }
 
         static void PrintBanner()
         {
-            Console.Clear();
-            WriteColor("\n", ConsoleColor.Cyan);
-            WriteColor("   ███████╗███╗   ██╗██████╗ ██████╗ \n", ConsoleColor.Cyan);
-            WriteColor("   ██╔════╝████╗  ██║██╔══██╗██╔══██╗\n", ConsoleColor.Cyan);
-            WriteColor("   █████╗  ██╔██╗ ██║██████╔╝██████╔╝\n", ConsoleColor.Cyan);
-            WriteColor("   ██╔══╝  ██║╚██╗██║██╔═══╝ ██╔═══╝ \n", ConsoleColor.Cyan);
-            WriteColor("   ██║     ██║ ╚████║██║     ██║     \n", ConsoleColor.Cyan);
-            WriteColor("   ╚═╝     ╚═╝  ╚═══╝╚═╝     ╚═╝     \n", ConsoleColor.Cyan);
-            WriteColor("              A N A L Y Z E R\n", ConsoleColor.White);
-            Console.ResetColor();
-            Console.WriteLine();
-            Separator();
+            AnsiConsole.Clear();
+
+            var banner = new Markup(
+                "[cyan]   ███████╗███╗   ██╗██████╗ ██████╗ \n" +
+                "   ██╔════╝████╗  ██║██╔══██╗██╔══██╗\n" +
+                "   █████╗  ██╔██╗ ██║██████╔╝██████╔╝\n" +
+                "   ██╔══╝  ██║╚██╗██║██╔═══╝ ██╔═══╝ \n" +
+                "   ██║     ██║ ╚████║██║     ██║     \n" +
+                "   ╚═╝     ╚═╝  ╚═══╝╚═╝     ╚═╝     [/]\n" +
+                "[white]             A N A L Y Z E R[/]"
+            );
+
+            var panel = new Panel(Align.Center(banner))
+                .Header("[cyan] FNPP [/]")
+                .BorderColor(Color.Cyan1)
+                .Border(BoxBorder.Double)
+                .Padding(2, 1);
+
+            AnsiConsole.Write(panel);
+            AnsiConsole.WriteLine();
         }
 
-        static void PrintHelp()
+        static void Pause()
         {
-            Console.WriteLine();
-            Separator();
-            WriteColor("  COMMANDS\n", ConsoleColor.White);
-            Separator();
-            Cmd("scan   ", "Run a single detection cycle");
-            Cmd("start  ", $"Start continuous scanning (every {ScanInterval}s)");
-            Cmd("stop   ", "Stop continuous scanning");
-            Cmd("alerts ", "Show all recorded alerts");
-            Cmd("status ", "Show scanner status");
-            Cmd("clear  ", "Clear screen");
-            Cmd("help   ", "Show this help");
-            Cmd("exit   ", "Exit FNPP Scanner");
-            Separator();
-        }
-
-        // ── Helpers ───────────────────────────────────────────────────────────
-
-        static void Prompt()    => WriteColor("\n  fnpp> ", ConsoleColor.Cyan);
-        static void Separator() => WriteColor("  " + new string('─', 48) + "\n", ConsoleColor.DarkGray);
-        static void Ok(string s)   => WriteColor($"  [+] {s}\n", ConsoleColor.Green);
-        static void Info(string s) => WriteColor($"  [*] {s}\n", ConsoleColor.Cyan);
-        static void Warn(string s) => WriteColor($"  [!] {s}\n", ConsoleColor.Yellow);
-
-        static void Cmd(string name, string desc)
-        {
-            WriteColor($"  {name}  ", ConsoleColor.Cyan);
-            WriteColor($"{desc}\n", ConsoleColor.Gray);
-        }
-
-        static ConsoleColor SevColor(AlertSeverity sev) => sev switch
-        {
-            AlertSeverity.High   => ConsoleColor.Red,
-            AlertSeverity.Medium => ConsoleColor.Yellow,
-            _                    => ConsoleColor.DarkGray
-        };
-
-        static void WriteColor(string text, ConsoleColor color)
-        {
-            Console.ForegroundColor = color;
-            Console.Write(text);
-            Console.ResetColor();
+            AnsiConsole.WriteLine();
+            AnsiConsole.MarkupLine("[grey]  Press any key to continue...[/]");
+            Console.ReadKey(true);
+            AnsiConsole.WriteLine();
         }
 
         // ── SeDebugPrivilege ──────────────────────────────────────────────────

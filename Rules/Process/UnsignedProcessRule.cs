@@ -1,7 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Runtime.InteropServices;
 using FNPPAnalyzer.Config;
 using FNPPAnalyzer.Engine;
 using FNPPAnalyzer.Models;
@@ -68,15 +66,16 @@ namespace FNPPAnalyzer.Rules.Process
                         { inSystem = true; break; }
                     if (!inSystem) continue;
 
-                    if (!IsAuthenticodeSigned(path))
+                    if (AuthenticodeVerifier.Verify(path) != SignatureStatus.Valid)
                         events.Add(new DetectionEvent
                         {
-                            RuleId = RuleId,
-                            RuleName = Name,
-                            Severity = AlertSeverity.High,
-                            Type = AlertType.MAL,
-                            Description = $"Unsigned executable in system path: {proc.ProcessName} ({path})",
-                            Metadata = new { ProcessId = proc.Id, Path = path }
+                            RuleId         = RuleId,
+                            RuleName       = Name,
+                            Severity       = AlertSeverity.High,
+                            Type           = AlertType.MAL,
+                            Description    = $"Unsigned executable in system path: {proc.ProcessName} ({path})",
+                            ExecutablePath = path,
+                            Metadata       = new { ProcessId = proc.Id, Path = path }
                         });
                 }
                 catch { }
@@ -84,106 +83,5 @@ namespace FNPPAnalyzer.Rules.Process
             return events;
         }
 
-        // ── WinVerifyTrust P/Invoke ───────────────────────────────────────────────────
-
-        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-        private struct WINTRUST_FILE_INFO
-        {
-            public uint  cbStruct;
-            public IntPtr pcwszFilePath;
-            public IntPtr hFile;
-            public IntPtr pgKnownSubject;
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct WINTRUST_DATA
-        {
-            public uint  cbStruct;
-            public IntPtr pPolicyCallbackData;
-            public IntPtr pSIPClientData;
-            public uint  dwUIChoice;           // 2 = WTD_UI_NONE
-            public uint  fdwRevocationChecks;  // 0 = WTD_REVOKE_NONE
-            public uint  dwUnionChoice;        // 1 = WTD_CHOICE_FILE
-            public IntPtr pInfo;               // points to WINTRUST_FILE_INFO
-            public uint  dwStateAction;        // 1 = WTD_STATEACTION_VERIFY
-            public IntPtr hWVTStateData;
-            public IntPtr pwszURLReference;
-            public uint  dwProvFlags;          // 0x10 = WTD_CACHE_ONLY_URL_RETRIEVAL
-            public uint  dwUIContext;
-            public IntPtr pSignatureSettings;
-        }
-
-        private static readonly Guid ActionGenericVerifyV2 =
-            new("00AAC56B-CD44-11D0-8CC2-00C04FC295EE");
-
-        [DllImport("wintrust.dll", ExactSpelling = true, CharSet = CharSet.Unicode)]
-        private static extern uint WinVerifyTrust(IntPtr hWnd, ref Guid pgActionID,
-            ref WINTRUST_DATA pWVTData);
-
-        private static bool IsAuthenticodeSigned(string filePath)
-        {
-            if (!File.Exists(filePath)) return true;
-
-            IntPtr pathPtr     = IntPtr.Zero;
-            IntPtr fileInfoPtr = IntPtr.Zero;
-
-            try
-            {
-                pathPtr = Marshal.StringToHGlobalUni(filePath);
-
-                var fileInfo = new WINTRUST_FILE_INFO
-                {
-                    cbStruct       = (uint)Marshal.SizeOf<WINTRUST_FILE_INFO>(),
-                    pcwszFilePath  = pathPtr,
-                    hFile          = IntPtr.Zero,
-                    pgKnownSubject = IntPtr.Zero
-                };
-
-                fileInfoPtr = Marshal.AllocHGlobal(Marshal.SizeOf<WINTRUST_FILE_INFO>());
-                Marshal.StructureToPtr(fileInfo, fileInfoPtr, false);
-
-                var trust = new WINTRUST_DATA
-                {
-                    cbStruct            = (uint)Marshal.SizeOf<WINTRUST_DATA>(),
-                    pPolicyCallbackData = IntPtr.Zero,
-                    pSIPClientData      = IntPtr.Zero,
-                    dwUIChoice          = 2,    // WTD_UI_NONE
-                    fdwRevocationChecks = 0,    // WTD_REVOKE_NONE
-                    dwUnionChoice       = 1,    // WTD_CHOICE_FILE
-                    pInfo               = fileInfoPtr,
-                    dwStateAction       = 1,    // WTD_STATEACTION_VERIFY
-                    hWVTStateData       = IntPtr.Zero,
-                    pwszURLReference    = IntPtr.Zero,
-                    dwProvFlags         = 0x10, // WTD_CACHE_ONLY_URL_RETRIEVAL (no network)
-                    dwUIContext         = 0,
-                    pSignatureSettings  = IntPtr.Zero
-                };
-
-                var actionId = ActionGenericVerifyV2;
-                uint result;
-                try
-                {
-                    result = WinVerifyTrust(IntPtr.Zero, ref actionId, ref trust);
-                }
-                finally
-                {
-                    // Must always close, even if the verify call throws
-                    trust.dwStateAction = 2; // WTD_STATEACTION_CLOSE
-                    WinVerifyTrust(IntPtr.Zero, ref actionId, ref trust);
-                }
-
-                return result == 0; // S_OK = valid Authenticode signature present
-            }
-            catch
-            {
-                return true; // if we can't check, assume signed (avoid false positives)
-            }
-            finally
-            {
-                if (fileInfoPtr != IntPtr.Zero) Marshal.FreeHGlobal(fileInfoPtr);
-                if (pathPtr     != IntPtr.Zero) Marshal.FreeHGlobal(pathPtr);
-            }
-        }
-        // ─────────────────────────────────────────────────────────────────────────────
     }
 }

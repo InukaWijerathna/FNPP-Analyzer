@@ -38,12 +38,13 @@ namespace FNPPAnalyzer.Rules.Process
                     if (!isLegit)
                         events.Add(new DetectionEvent
                         {
-                            RuleId = RuleId,
-                            RuleName = Name,
-                            Severity = AlertSeverity.High,
-                            Type = AlertType.MAL,
-                            Description = $"System process {proc.ProcessName} running from unexpected location: {path}",
-                            Metadata = new { ProcessId = proc.Id, Path = path }
+                            RuleId         = RuleId,
+                            RuleName       = Name,
+                            Severity       = AlertSeverity.High,
+                            Type           = AlertType.MAL,
+                            Description    = $"System process {proc.ProcessName} running from unexpected location: {path}",
+                            ExecutablePath = path,
+                            Metadata       = new { ProcessId = proc.Id, Path = path }
                         });
                 }
                 catch { }

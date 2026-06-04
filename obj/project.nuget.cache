@@ -1,9 +1,10 @@
 {
   "version": 2,
-  "dgSpecHash": "vjtKZKOg7Zk=",
+  "dgSpecHash": "ovbid/NdaTQ=",
   "success": true,
   "projectFilePath": "C:\\Users\\HP\\Documents\\GitHub\\Process-and-file-Analyser-demo\\FNPPAnalyzer.csproj",
   "expectedPackageFiles": [
+    "C:\\Users\\HP\\.nuget\\packages\\spectre.console\\0.49.1\\spectre.console.0.49.1.nupkg.sha512",
     "C:\\Users\\HP\\.nuget\\packages\\system.codedom\\9.0.0\\system.codedom.9.0.0.nupkg.sha512",
     "C:\\Users\\HP\\.nuget\\packages\\system.management\\9.0.0\\system.management.9.0.0.nupkg.sha512"
   ],
