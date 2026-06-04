@@ -18,8 +18,7 @@ namespace FNPPAnalyzer.Rules.Persistence
 
         private static readonly string[] UntrustedFragments =
         [
-            @"\Temp\", @"\Downloads\", @"\AppData\Local\Temp\",
-            @"\AppData\Roaming\", @"\Public\", @"C:\Temp\"
+            @"\Temp\", @"\Downloads\", @"\AppData\Local\Temp\", @"C:\Temp\"
         ];
 
         private static readonly string[] TrustedPrefixes =
@@ -27,7 +26,14 @@ namespace FNPPAnalyzer.Rules.Persistence
             @"C:\Windows\",
             @"C:\Program Files\",
             @"C:\Program Files (x86)\",
+            @"C:\ProgramData\Microsoft\",   // Windows Defender, .NET runtime tasks, etc.
         ];
+
+        // Only flag paths that end in a recognized executable extension.
+        // Unquoted schtasks paths with spaces get truncated by the space-split;
+        // the truncated fragment has no extension and would be a false positive.
+        private static readonly string[] ExecutableExtensions =
+            [".exe", ".cmd", ".bat", ".ps1", ".vbs", ".js", ".msi", ".dll"];
 
         public IReadOnlyList<DetectionEvent> Evaluate(ScanContext context)
         {
@@ -36,13 +42,14 @@ namespace FNPPAnalyzer.Rules.Persistence
             string? output = RunSchtasks();
             if (output == null) return events;
 
-            // schtasks /fo LIST /v prints one task per block, fields are "Key:  Value"
+            // schtasks /fo LIST /v prints one task per block; fields are "Key:  Value"
             string? currentTask = null;
             string? runAs       = null;
 
             foreach (string rawLine in output.Split('\n'))
             {
                 string line = rawLine.Trim();
+
                 if (line.StartsWith("TaskName:", StringComparison.OrdinalIgnoreCase))
                 {
                     currentTask = ExtractValue(line);
@@ -60,14 +67,14 @@ namespace FNPPAnalyzer.Rules.Persistence
 
                 string taskExe = ExtractValue(line);
 
-                // Skip placeholders / COM activations that schtasks emits
-                if (string.IsNullOrWhiteSpace(taskExe)  ||
+                // Skip placeholders / COM activations emitted by schtasks
+                if (string.IsNullOrWhiteSpace(taskExe) ||
                     taskExe.Equals("N/A", StringComparison.OrdinalIgnoreCase) ||
                     taskExe.StartsWith("COM", StringComparison.OrdinalIgnoreCase))
                     continue;
 
-                // Expand environment variables (%SystemRoot%, %windir%, etc.)
-                string exePath = Environment.ExpandEnvironmentVariables(taskExe.Trim('"')).Split(' ')[0];
+                string? exePath = ParseExePath(taskExe);
+                if (exePath == null) continue;
 
                 string? reason = Classify(exePath, runAs);
                 if (reason != null)
@@ -88,21 +95,56 @@ namespace FNPPAnalyzer.Rules.Persistence
             return events;
         }
 
+        // Extracts and validates the executable path from the "Task To Run:" field.
+        // Returns null when the path should be silently skipped.
+        private static string? ParseExePath(string taskToRun)
+        {
+            string raw = taskToRun.Trim();
+            string candidate;
+
+            if (raw.StartsWith('"'))
+            {
+                // Properly quoted: "C:\Path With Spaces\exe.exe" [-args]
+                int closing = raw.IndexOf('"', 1);
+                candidate = closing > 1 ? raw[1..closing] : raw[1..];
+            }
+            else
+            {
+                // Unquoted: take only the first space-delimited token.
+                // Paths with spaces will be truncated here — that's intentional;
+                // the extension check below will discard the fragment as a non-match.
+                candidate = raw.Split(' ')[0];
+            }
+
+            candidate = Environment.ExpandEnvironmentVariables(candidate.Trim());
+
+            // Skip relative names (e.g. "sc.exe", "BthUdTask.exe") that resolve via
+            // PATH / System32 — they're legitimate Windows tools, not persistence.
+            if (!candidate.Contains('\\') && !candidate.Contains('/'))
+                return null;
+
+            // Skip fragments without a recognized executable extension — these are
+            // almost always the result of an unquoted path being split at a space.
+            string ext = Path.GetExtension(candidate).ToLowerInvariant();
+            if (Array.IndexOf(ExecutableExtensions, ext) < 0)
+                return null;
+
+            return candidate;
+        }
+
         private static string? Classify(string exePath, string? runAs)
         {
-            if (string.IsNullOrWhiteSpace(exePath)) return null;
-
-            // Flag executables from user-writable directories
+            // Flag executables from user-writable / temp directories
             foreach (var frag in UntrustedFragments)
                 if (exePath.Contains(frag, StringComparison.OrdinalIgnoreCase))
                     return "runs from untrusted path";
 
-            // Flag missing executables that aren't in known trusted install locations
+            // Flag missing executables outside known trusted install locations
             if (!File.Exists(exePath))
             {
                 foreach (var prefix in TrustedPrefixes)
                     if (exePath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                        return null; // stale but not suspicious (software uninstalled cleanly)
+                        return null; // stale entry from an uninstalled app — not suspicious
 
                 return "target executable not found";
             }

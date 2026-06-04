@@ -117,20 +117,50 @@ namespace FNPPAnalyzer
             AnsiConsole.Write(new Rule("[bold cyan]Detection Scan[/]").RuleStyle("grey"));
 
             int priorCount = _broker!.GetAll().Count;
+            // +1 for context build, +1 for signature verification, +N for each rule
+            int totalSteps = engine.RuleCount + 2;
 
-            AnsiConsole.Status()
-                .Spinner(Spinner.Known.Dots)
-                .SpinnerStyle(new Style(Color.Cyan1))
-                .Start("[cyan]Running detection cycle...[/]", ctx =>
-                {
-                    engine.RunCycle();
-                    ctx.Status("[cyan]Verifying signatures...[/]");
-                    var newAlerts = _broker.GetFrom(priorCount);
-                    _filter!.Process(newAlerts);
-                });
+            FilterResult? result = null;
 
-            var result = _filter!.Process(_broker.GetFrom(priorCount));
-            ShowFilterSummary(result);
+            // Silence real-time alert popups while the progress bar owns the console.
+            // All new alerts are shown in the summary table after the bar completes.
+            _broker!.AlertRaised -= OnAlertRaised;
+            try
+            {
+                AnsiConsole.Progress()
+                    .AutoClear(true)        // bar disappears when done — no residual bars on repeat scans
+                    .HideCompleted(false)
+                    .Columns(
+                        new TaskDescriptionColumn { Alignment = Justify.Left },
+                        new ProgressBarColumn(),
+                        new PercentageColumn(),
+                        new SpinnerColumn(Spinner.Known.Dots) { Style = new Style(Color.Cyan1) }
+                    )
+                    .Start(ctx =>
+                    {
+                        var task = ctx.AddTask("[cyan]Initializing...[/]", maxValue: totalSteps);
+
+                        var reporter = new Progress<ScanProgress>(p =>
+                        {
+                            task.Description = $"[grey][[{p.Completed}/{totalSteps}]][/] [cyan]{Markup.Escape(p.Phase)}[/]";
+                            task.Value       = p.Completed;
+                        });
+
+                        engine.RunCycle(reporter);
+
+                        // Final step: signature verification
+                        task.Description = $"[grey][[{totalSteps - 1}/{totalSteps}]][/] [cyan]Verifying signatures...[/]";
+                        task.Value       = totalSteps - 1;
+                        result           = _filter!.Process(_broker.GetFrom(priorCount));
+                        task.Value       = totalSteps;
+                    });
+            }
+            finally
+            {
+                _broker!.AlertRaised += OnAlertRaised;
+            }
+
+            ShowFilterSummary(result!);
             Pause();
         }
 

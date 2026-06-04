@@ -96,27 +96,35 @@ namespace FNPPAnalyzer.Rules.Process
         private static void ScanProcessMemory(
             int pid, string procName, IntPtr hProcess, List<DetectionEvent> events)
         {
-            IntPtr address = IntPtr.Zero;
+            long   address = 0;
             uint   mbiSize = (uint)Marshal.SizeOf<MEMORY_BASIC_INFORMATION>();
+            long   suspiciousBytes = 0;
+            int    regions = 0;
+            const int MaxRegions = 50_000; // hard cap — prevents runaway on pathological processes
 
-            long suspiciousBytes = 0;
-
-            while (VirtualQueryEx(hProcess, address, out var mbi, mbiSize) != 0)
+            while (regions++ < MaxRegions &&
+                   VirtualQueryEx(hProcess, (IntPtr)address, out var mbi, mbiSize) != 0)
             {
-                // Advance cursor; bail if we've wrapped around the address space
-                try { address = IntPtr.Add(mbi.BaseAddress, (int)mbi.RegionSize); }
-                catch (OverflowException) { break; }
+                long regionSize = (long)mbi.RegionSize;
 
-                if (address == IntPtr.Zero) break;
+                // Zero-size region would cause an infinite loop — shouldn't happen but guard anyway
+                if (regionSize <= 0) break;
 
-                // Only interested in committed, private, executable regions
+                // Advance cursor using 64-bit arithmetic to avoid (int) truncation on large regions
+                long nextAddress = (long)mbi.BaseAddress + regionSize;
+
+                // Past the end of the 64-bit user-mode address space → done
+                if (nextAddress <= 0) break;
+                address = nextAddress;
+
+                // Only interested in committed, private, RWX regions
                 bool committed = (mbi.State   & MEM_COMMIT)  != 0;
                 bool priv      = (mbi.Type    & MEM_PRIVATE) != 0;
                 bool rwx       = (mbi.Protect & RWX_MASK)    != 0;
 
                 if (!committed || !priv || !rwx) continue;
 
-                suspiciousBytes += (long)mbi.RegionSize;
+                suspiciousBytes += regionSize;
             }
 
             // Only raise an alert if total suspicious memory exceeds 4 KB

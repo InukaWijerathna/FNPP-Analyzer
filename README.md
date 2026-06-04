@@ -1,6 +1,6 @@
 # FNPP Analyzer
 
-A Windows endpoint detection and response (EDR) tool that monitors running processes, network connections, file activity, and registry persistence for malicious behaviour. Runs entirely in the terminal with an interactive TUI.
+A Windows host-based threat detector that monitors running processes, network connections, file activity, and registry persistence for malicious behaviour. Runs entirely in the terminal with an interactive TUI.
 
 ```
 ╔══════════════════════════════════════════════════╗
@@ -23,8 +23,8 @@ A Windows endpoint detection and response (EDR) tool that monitors running proce
 ## Build & Run
 
 ```powershell
-git clone https://github.com/your-username/Process-and-file-Analyser-demo
-cd Process-and-file-Analyser-demo
+git clone https://github.com/your-username/FNPP-Analyzer
+cd FNPP-Analyzer
 
 dotnet build FNPPAnalyzer.csproj
 dotnet run --project FNPPAnalyzer.csproj
