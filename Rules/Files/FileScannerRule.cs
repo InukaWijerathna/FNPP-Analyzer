@@ -29,7 +29,7 @@ namespace FNPPAnalyzer.Rules.Files
 
                 try
                 {
-                    foreach (var file in Directory.GetFiles(dir, "*.*", SearchOption.TopDirectoryOnly))
+                    foreach (var file in Directory.GetFiles(dir, "*.*", SearchOption.AllDirectories))
                     {
                         var info = new FileInfo(file);
 
@@ -64,7 +64,8 @@ namespace FNPPAnalyzer.Rules.Files
                             });
                     }
                 }
-                catch { }
+                catch (UnauthorizedAccessException) { }  // can't read some subdirectories — expected
+                catch (Exception ex) { Console.Error.WriteLine($"[FILE-001/002] {dir}: {ex.GetType().Name}: {ex.Message}"); }
             }
             return events;
         }

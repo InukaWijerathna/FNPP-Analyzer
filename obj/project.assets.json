@@ -149,11 +149,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\HP\\Documents\\GitHub\\Process-and-file-Analyser-demo\\FNPPAnalyzer.csproj",
+      "projectUniqueName": "C:\\Users\\HP\\Documents\\GitHub\\FNPP-Analyzer\\FNPPAnalyzer.csproj",
       "projectName": "FNPPAnalyzer",
-      "projectPath": "C:\\Users\\HP\\Documents\\GitHub\\Process-and-file-Analyser-demo\\FNPPAnalyzer.csproj",
+      "projectPath": "C:\\Users\\HP\\Documents\\GitHub\\FNPP-Analyzer\\FNPPAnalyzer.csproj",
       "packagesPath": "C:\\Users\\HP\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\HP\\Documents\\GitHub\\Process-and-file-Analyser-demo\\obj\\",
+      "outputPath": "C:\\Users\\HP\\Documents\\GitHub\\FNPP-Analyzer\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "C:\\Users\\HP\\AppData\\Roaming\\NuGet\\NuGet.Config"

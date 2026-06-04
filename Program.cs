@@ -16,10 +16,11 @@ namespace FNPPAnalyzer
 {
     static class Program
     {
-        static CancellationTokenSource? _cts;
-        static Task? _scanTask;
-        static AlertBroker? _broker;
-        static PostScanFilter? _filter;
+        static CancellationTokenSource?   _cts;
+        static Task?                      _scanTask;
+        static AlertBroker?               _broker;
+        static PostScanFilter?            _filter;
+        static ProcessCreationWatcher?    _watcher;
         static readonly int ScanInterval = 30;
 
         static void Main()
@@ -45,16 +46,25 @@ namespace FNPPAnalyzer
             engine.Register(new SuspiciousExecutionRule(config));
             engine.Register(new SuspiciousNetworkActivityRule(config));
             engine.Register(new StartupPersistenceRule());
+            engine.Register(new ScheduledTaskPersistenceRule());
             engine.Register(new FileScannerRule(config));
             engine.Register(new ParentChildAnomalyRule());
             engine.Register(new LolBinRule());
             engine.Register(new UnsignedProcessRule(config));
             engine.Register(new KnownHashRule(config));
             engine.Register(new PeImportRule(config));
+            engine.Register(new MemoryInjectionRule(config));
 
             _broker.AlertRaised += OnAlertRaised;
 
+            // Real-time process creation watcher — runs between scan cycles
+            _watcher = new ProcessCreationWatcher(_broker, config);
+            _watcher.Start();
+
             MenuLoop(engine);
+
+            _watcher.Stop();
+            _watcher.Dispose();
         }
 
         // ── Menu ─────────────────────────────────────────────────────────────

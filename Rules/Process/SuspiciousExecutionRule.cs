@@ -69,7 +69,9 @@ namespace FNPPAnalyzer.Rules.Process
                         }
                     }
                 }
-                catch { }
+                catch (System.ComponentModel.Win32Exception) { } // access denied on protected processes — expected
+                catch (InvalidOperationException) { }            // process exited between enumeration and access
+                catch (Exception ex) { Console.Error.WriteLine($"[PROC-002/003] PID {proc.Id}: {ex.GetType().Name}: {ex.Message}"); }
             }
             return events;
         }

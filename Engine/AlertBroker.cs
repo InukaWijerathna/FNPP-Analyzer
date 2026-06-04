@@ -30,7 +30,11 @@ namespace FNPPAnalyzer.Engine
                 _whitelist.IsWhitelisted(alert.ExecutablePath))
                 return;
 
-            string fingerprint = $"{alert.RuleId}:{alert.Description}";
+            // Include path when available so the same rule firing on two different binaries
+            // produces two distinct alerts rather than silently deduplicating the second one.
+            string fingerprint = string.IsNullOrEmpty(alert.ExecutablePath)
+                ? $"{alert.RuleId}:{alert.Description}"
+                : $"{alert.RuleId}:{alert.ExecutablePath}";
             Alert? toFire = null;
 
             lock (_lock)

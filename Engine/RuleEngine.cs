@@ -57,6 +57,7 @@ namespace FNPPAnalyzer.Engine
             {
                 Processes = Process.GetProcesses(),
                 TcpConnections = IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpConnections(),
+                TcpConnectionsWithPid = NetworkHelper.GetTcpWithPid(),
                 ProcessCommandLines = cmdLines,
                 ParentPids = parentPids
             };
