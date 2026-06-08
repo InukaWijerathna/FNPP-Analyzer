@@ -23,7 +23,7 @@ A Windows host-based threat detector that monitors running processes, network co
 ## Build & Run
 
 ```powershell
-git clone https://github.com/your-username/FNPP-Analyzer
+git clone https://github.com/InukaWijerathna/FNPP-Analyzer
 cd FNPP-Analyzer
 
 dotnet build FNPPAnalyzer.csproj
@@ -69,17 +69,23 @@ Navigation is via arrow keys and Enter. No typing required.
 | Rule ID | Category | What it detects |
 |---|---|---|
 | PROC-001 | Process | System process name masquerading (e.g. `svchost` from wrong path) |
-| PROC-002 | Process | Execution from suspicious paths (Temp, Downloads, AppData) |
-| PROC-003 | Process | Anomalous parent–child process relationships |
-| PROC-004 | Process | Unsigned or untrusted process binaries |
+| PROC-002 | Process | Executables/scripts running from user-writable directories |
+| PROC-003 | Process | Scripts launched from untrusted paths (sub-finding of PROC-002) |
+| PROC-004 | Process | Shell interpreters spawned by Office applications or browsers |
 | PROC-005 | Process | Living-off-the-land binary (LOLBin) abuse |
-| NET-001 | Network | Connections to suspicious ports or high-entropy destinations |
-| FILE-001 | File | Double-extension / hidden executable indicators |
-| FILE-002 | File | Hidden executable in untrusted directories |
+| PROC-006 | Process | Unsigned executables running from Windows system directories |
+| PROC-007 | Process | RWX private memory regions — shellcode/DLL injection indicator |
+| NET-001 | Network | Outbound connections to suspicious ports |
+| NET-002 | Network | Port-scan behaviour (many distinct remote ports in a short window) |
+| NET-003 | Network | Connection-count bursts |
+| NET-004 | Network | Tor circuit / untrusted-process external connections |
+| FILE-001 | File | Double-extension files (e.g. `report.pdf.exe`) |
+| FILE-002 | File | Hidden executables in untrusted directories |
 | FILE-003 | File | Known malicious file hashes (SHA-256, extendable via `iocs.json`) |
-| FILE-004 | File | Suspicious PE import table entries |
+| FILE-004 | File | Suspicious PE import table entries (injection, keylogging, ransomware APIs, etc.) |
 | FILE-005 | File | YARA rule matches against process executables and untrusted-directory files |
-| PERSIST-001 | Persistence | Startup registry / scheduled task persistence |
+| PERS-001 | Persistence | Suspicious entries in Windows startup registry keys |
+| PERS-002 | Persistence | Scheduled tasks with untrusted or missing executables |
 
 ## YARA Rules
 
