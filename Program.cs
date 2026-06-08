@@ -160,13 +160,17 @@ namespace FNPPAnalyzer
                     _progressCtx = ctx;
                     try
                     {
-                        var task = ctx.AddTask("[cyan]Initializing...[/]", maxValue: totalSteps);
+                        var task = ctx.AddTask("[cyan]Initializing...[/]\n", maxValue: totalSteps);
 
                         // File-scanning rules can report a path on every single file — that's
-                        // far too high a refresh rate for the terminal (garbles/overlaps the
-                        // bar). Throttle detail-only ticks and keep the description on one
-                        // line so the task's row height never changes between refreshes.
+                        // far too high a refresh rate for the terminal. Throttle detail-only
+                        // ticks, and ALWAYS render the description as exactly two lines (phase
+                        // on line 1, scan path on line 2, blank when there's none yet) — a
+                        // task whose row height changes between refreshes is what corrupted
+                        // the live-rendered display before (bar/percentage drifting out of
+                        // sync with the description).
                         DateTime lastDetailTick = DateTime.MinValue;
+                        string?  lastDetail     = null;
 
                         var reporter = new Progress<ScanProgress>(p =>
                         {
@@ -176,30 +180,25 @@ namespace FNPPAnalyzer
                             {
                                 if (now - lastDetailTick < TimeSpan.FromMilliseconds(150)) return;
                                 lastDetailTick = now;
+                                lastDetail     = p.Detail;
                             }
 
                             lock (_consoleLock)
                             {
-                                string prefix = $"[{p.Completed}/{totalSteps}] {p.Phase}";
-                                string desc   = $"[grey][[{p.Completed}/{totalSteps}]][/] [cyan]{Markup.Escape(p.Phase)}[/]";
+                                string line1 = $"[grey][[{p.Completed}/{totalSteps}]][/] [cyan]{Markup.Escape(p.Phase)}[/]";
 
-                                if (isDetailTick)
-                                {
-                                    // Reserve room for " — ", the bar, percentage, spinner and
-                                    // grid padding so the whole row stays on one line — a
-                                    // wrap changes the task's row height and corrupts the
-                                    // live-rendered display (the bar/percentage end up on
-                                    // their own line, out of sync with the description).
-                                    const int otherColumnsReserve = 58;
-                                    const string separator = " — ";
-                                    int available = AnsiConsole.Profile.Width
-                                                    - prefix.Length - separator.Length - otherColumnsReserve;
+                                // Reserve room for the bar, percentage, spinner and grid padding
+                                // so this line never wraps onto a third — wrapping is exactly
+                                // what produces a variable row height.
+                                const int otherColumnsReserve = 58;
+                                const string indent = "    ";
+                                int available = AnsiConsole.Profile.Width - otherColumnsReserve - indent.Length;
 
-                                    if (available >= 12)
-                                        desc += $"[grey]{separator}{Markup.Escape(TruncatePath(p.Detail!, available))}[/]";
-                                }
+                                string line2 = lastDetail != null && available >= 12
+                                    ? $"{indent}[grey]{Markup.Escape(TruncatePath(lastDetail, available))}[/]"
+                                    : "";
 
-                                task.Description = desc;
+                                task.Description = $"{line1}\n{line2}";
                                 task.Value       = p.Completed;
                                 ctx.Refresh();
                             }
@@ -209,7 +208,7 @@ namespace FNPPAnalyzer
 
                         lock (_consoleLock)
                         {
-                            task.Description = $"[grey][[{totalSteps - 1}/{totalSteps}]][/] [cyan]Verifying signatures...[/]";
+                            task.Description = $"[grey][[{totalSteps - 1}/{totalSteps}]][/] [cyan]Verifying signatures...[/]\n";
                             task.Value       = totalSteps - 1;
                             ctx.Refresh();
                         }
