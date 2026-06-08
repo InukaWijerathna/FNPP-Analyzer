@@ -12,6 +12,8 @@ using FNPPAnalyzer.Rules.Persistence;
 using FNPPAnalyzer.Rules.Process;
 using Spectre.Console;
 
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("FNPPAnalyzer.Tests")]
+
 namespace FNPPAnalyzer
 {
     static class Program
@@ -22,6 +24,8 @@ namespace FNPPAnalyzer
         static PostScanFilter?            _filter;
         static ProcessCreationWatcher?    _watcher;
         static YaraEngine?                _yara;
+        static SignatureWhitelist?        _whitelist;
+        static KnownHashRule?             _knownHashRule;
         static readonly int               ScanInterval = 30;
 
         // Held during a manual scan so OnAlertRaised can redraw the progress bar
@@ -43,9 +47,9 @@ namespace FNPPAnalyzer
             if (!System.IO.File.Exists(configPath))
                 config.Save(configPath);
 
-            var whitelist = new SignatureWhitelist("whitelist.json");
-            _broker  = new AlertBroker("alerts.log", whitelist);
-            _filter  = new PostScanFilter(whitelist);
+            _whitelist = new SignatureWhitelist("whitelist.json");
+            _broker  = new AlertBroker("alerts.log", _whitelist);
+            _filter  = new PostScanFilter(_whitelist);
             var engine = new RuleEngine(_broker);
 
             _yara = new YaraEngine(config.YaraRulesPath);
@@ -63,7 +67,10 @@ namespace FNPPAnalyzer
             engine.Register(new ParentChildAnomalyRule());
             engine.Register(new LolBinRule());
             engine.Register(new UnsignedProcessRule(config));
-            engine.Register(new KnownHashRule(config));
+
+            _knownHashRule = new KnownHashRule(config);
+            engine.Register(_knownHashRule);
+
             engine.Register(new PeImportRule(config));
             engine.Register(new MemoryInjectionRule(config));
             engine.Register(new YaraScanRule(_yara, config));
@@ -100,8 +107,9 @@ namespace FNPPAnalyzer
                             "3.  Stop Monitor    (stop continuous scanning)",
                             "4.  Alerts          (view all recorded alerts)",
                             "5.  Status          (scanner state & statistics)",
-                            "6.  Clear           (clear screen & redraw banner)",
-                            "7.  Quit"
+                            "6.  Reload Rules    (reload IOCs, whitelist & YARA rules)",
+                            "7.  Clear           (clear screen & redraw banner)",
+                            "8.  Quit"
                         ));
 
                 switch (choice[0])
@@ -111,8 +119,9 @@ namespace FNPPAnalyzer
                     case '3': StopMonitorView();          break;
                     case '4': AlertsView();               break;
                     case '5': StatusView();               break;
-                    case '6': AnsiConsole.Clear(); PrintBanner(); break;
-                    case '7':
+                    case '6': ReloadRulesView();          break;
+                    case '7': AnsiConsole.Clear(); PrintBanner(); break;
+                    case '8':
                         StopMonitor();
                         _scanTask?.Wait(2000);
                         AnsiConsole.WriteLine();
@@ -171,9 +180,24 @@ namespace FNPPAnalyzer
 
                             lock (_consoleLock)
                             {
-                                string desc = $"[grey][[{p.Completed}/{totalSteps}]][/] [cyan]{Markup.Escape(p.Phase)}[/]";
+                                string prefix = $"[{p.Completed}/{totalSteps}] {p.Phase}";
+                                string desc   = $"[grey][[{p.Completed}/{totalSteps}]][/] [cyan]{Markup.Escape(p.Phase)}[/]";
+
                                 if (isDetailTick)
-                                    desc += $" [grey]— {Markup.Escape(TruncatePath(p.Detail!, 64))}[/]";
+                                {
+                                    // Reserve room for " — ", the bar, percentage, spinner and
+                                    // grid padding so the whole row stays on one line — a
+                                    // wrap changes the task's row height and corrupts the
+                                    // live-rendered display (the bar/percentage end up on
+                                    // their own line, out of sync with the description).
+                                    const int otherColumnsReserve = 58;
+                                    const string separator = " — ";
+                                    int available = AnsiConsole.Profile.Width
+                                                    - prefix.Length - separator.Length - otherColumnsReserve;
+
+                                    if (available >= 12)
+                                        desc += $"[grey]{separator}{Markup.Escape(TruncatePath(p.Detail!, available))}[/]";
+                                }
 
                                 task.Description = desc;
                                 task.Value       = p.Completed;
@@ -381,6 +405,35 @@ namespace FNPPAnalyzer
             Pause();
         }
 
+        static void ReloadRulesView()
+        {
+            AnsiConsole.WriteLine();
+            AnsiConsole.Write(new Rule("[bold cyan]Reload Rules[/]").RuleStyle("grey"));
+            AnsiConsole.WriteLine();
+
+            var grid = new Grid()
+                .AddColumn(new GridColumn().Width(16))
+                .AddColumn(new GridColumn());
+
+            _whitelist?.Reload();
+            grid.AddRow("[grey]Whitelist  [/]", "[green]reloaded[/] [grey](whitelist.json)[/]");
+
+            _knownHashRule?.Reload();
+            grid.AddRow("[grey]IOC Hashes [/]", "[green]reloaded[/] [grey](iocs.json)[/]");
+
+            if (_yara != null)
+            {
+                bool ok = _yara.Reload();
+                string status = ok
+                    ? $"[green]reloaded[/] [grey]({_yara.RuleCount} rule(s) compiled)[/]"
+                    : "[yellow]no rules loaded[/] [grey](directory empty or compile failed — FILE-005 inactive)[/]";
+                grid.AddRow("[grey]YARA Rules [/]", status);
+            }
+
+            AnsiConsole.Write(new Padder(grid).Padding(2, 0));
+            Pause();
+        }
+
         // ── Live alert display ────────────────────────────────────────────────
 
         static void OnAlertRaised(Alert alert)
@@ -451,7 +504,7 @@ namespace FNPPAnalyzer
 
         // Elides the middle of long paths so the progress line stays a single row
         // (e.g. C:\Users\...\AppData\Local\Temp\payload.exe) — keeps the file name visible.
-        static string TruncatePath(string path, int maxLen)
+        internal static string TruncatePath(string path, int maxLen)
         {
             if (path.Length <= maxLen) return path;
 

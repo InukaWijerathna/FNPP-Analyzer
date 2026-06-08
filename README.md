@@ -52,8 +52,9 @@ Navigation is via arrow keys and Enter. No typing required.
     3.  Stop Monitor    (stop continuous scanning)
     4.  Alerts          (view all recorded alerts)
     5.  Status          (scanner state & statistics)
-    6.  Clear
-    7.  Quit
+    6.  Reload Rules    (reload IOCs, whitelist & YARA rules)
+    7.  Clear
+    8.  Quit
 ```
 
 | Command | Description |
@@ -63,6 +64,7 @@ Navigation is via arrow keys and Enter. No typing required.
 | Stop Monitor | Cancels the background scan |
 | Alerts | Shows all recorded alerts in a table |
 | Status | Shows scanner state, interval, and alert count |
+| Reload Rules | Re-reads `whitelist.json`, `iocs.json`, and recompiles `YaraRules/*.yar` without restarting |
 
 ## Detection Rules
 
@@ -96,8 +98,9 @@ directories against compiled [YARA](https://virustotal.github.io/yara/) rules us
 shipped with a baseline `malware_indicators.yar` set covering Mimikatz, Cobalt Strike,
 ransomware notes, encoded PowerShell, process-hollowing API combos, etc.).
 
-Drop additional `.yar`/`.yara` files into that folder to extend coverage — restart the
-scanner to recompile. Each matched rule becomes a `FILE-005` alert; severity and alert
+Drop additional `.yar`/`.yara` files into that folder to extend coverage, then use
+**Reload Rules** from the main menu to recompile without restarting. Each matched rule
+becomes a `FILE-005` alert; severity and alert
 type are read from the rule's `meta.severity` (`Low`/`Medium`/`High`) and `meta.type`
 (`MAL`/`TROJ`/`BACK`/`RECON`/`RANSOM`/`INFO`), defaulting to `Medium`/`MAL` when omitted:
 

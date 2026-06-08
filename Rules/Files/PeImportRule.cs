@@ -62,6 +62,10 @@ namespace FNPPAnalyzer.Rules.Files
 
         private readonly AppConfig _config;
 
+        // String-extraction is the costly part — memoize per file by path+mtime+size so
+        // re-scans of unchanged files (every cycle, every 30s in live monitor) are free.
+        private readonly FileScanCache<List<DetectionEvent>> _cache = new();
+
         public PeImportRule(AppConfig config) => _config = config;
 
         public IReadOnlyList<DetectionEvent> Evaluate(ScanContext context)
@@ -78,18 +82,29 @@ namespace FNPPAnalyzer.Rules.Files
                     foreach (var file in Directory.GetFiles(dir, "*.exe", SearchOption.TopDirectoryOnly))
                     {
                         context.ReportDetail?.Invoke(file);
-                        events.AddRange(ScanFile(file));
+                        events.AddRange(ScanFileCached(file));
                     }
 
                     foreach (var file in Directory.GetFiles(dir, "*.dll", SearchOption.TopDirectoryOnly))
                     {
                         context.ReportDetail?.Invoke(file);
-                        events.AddRange(ScanFile(file));
+                        events.AddRange(ScanFileCached(file));
                     }
                 }
                 catch { }
             }
             return events;
+        }
+
+        private List<DetectionEvent> ScanFileCached(string path)
+        {
+            try
+            {
+                var info = new FileInfo(path);
+                if (!info.Exists || info.Length > MaxFileBytes) return [];
+                return _cache.GetOrCompute(path, info, () => ScanFile(path));
+            }
+            catch { return []; }
         }
 
         // Returns a List (not an iterator) so exceptions from one file don't abort the
