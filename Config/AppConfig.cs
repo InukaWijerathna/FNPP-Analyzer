@@ -11,6 +11,7 @@ namespace FNPPAnalyzer.Config
         public List<string> UntrustedExecutionPaths { get; set; } = new();
         public Dictionary<string, RuleConfig> Rules { get; set; } = new();
         public int NetworkScanWindowSeconds { get; set; } = 30;
+        public string YaraRulesPath { get; set; } = "YaraRules";
 
         public static AppConfig Load(string path)
         {

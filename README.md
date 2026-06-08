@@ -74,10 +74,39 @@ Navigation is via arrow keys and Enter. No typing required.
 | PROC-004 | Process | Unsigned or untrusted process binaries |
 | PROC-005 | Process | Living-off-the-land binary (LOLBin) abuse |
 | NET-001 | Network | Connections to suspicious ports or high-entropy destinations |
-| FILE-001 | File | Known malicious file hashes |
-| FILE-002 | File | Suspicious PE import table entries |
-| FILE-003 | File | General file-based indicators |
+| FILE-001 | File | Double-extension / hidden executable indicators |
+| FILE-002 | File | Hidden executable in untrusted directories |
+| FILE-003 | File | Known malicious file hashes (SHA-256, extendable via `iocs.json`) |
+| FILE-004 | File | Suspicious PE import table entries |
+| FILE-005 | File | YARA rule matches against process executables and untrusted-directory files |
 | PERSIST-001 | Persistence | Startup registry / scheduled task persistence |
+
+## YARA Rules
+
+FILE-005 scans running process executables and files under the configured untrusted
+directories against compiled [YARA](https://virustotal.github.io/yara/) rules using
+[dnYara](https://github.com/airbus-cert/dnYara). On startup the scanner compiles every
+`.yar`/`.yara` file found in the `YaraRulesPath` directory (default: `YaraRules/`,
+shipped with a baseline `malware_indicators.yar` set covering Mimikatz, Cobalt Strike,
+ransomware notes, encoded PowerShell, process-hollowing API combos, etc.).
+
+Drop additional `.yar`/`.yara` files into that folder to extend coverage — restart the
+scanner to recompile. Each matched rule becomes a `FILE-005` alert; severity and alert
+type are read from the rule's `meta.severity` (`Low`/`Medium`/`High`) and `meta.type`
+(`MAL`/`TROJ`/`BACK`/`RECON`/`RANSOM`/`INFO`), defaulting to `Medium`/`MAL` when omitted:
+
+```yara
+rule Example_Indicator
+{
+    meta:
+        severity = "High"
+        type = "TROJ"
+    strings:
+        $s1 = "evil string"
+    condition:
+        $s1
+}
+```
 
 ## Alerts
 
@@ -94,6 +123,7 @@ On first run, a `config.json` is generated with default values. Edit it to custo
   "TrustedSystemProcesses": ["svchost.exe", "explorer.exe", ...],
   "TrustedExecutionPaths":  ["C:\\Windows\\System32", ...],
   "UntrustedExecutionPaths": ["Downloads", "Temp", ...],
+  "YaraRulesPath": "YaraRules",
   "Rules": {
     "PROC-001": { "Enabled": true, "Severity": "High" }
   }

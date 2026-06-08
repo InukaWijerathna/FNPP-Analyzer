@@ -21,6 +21,7 @@ namespace FNPPAnalyzer
         static AlertBroker?               _broker;
         static PostScanFilter?            _filter;
         static ProcessCreationWatcher?    _watcher;
+        static YaraEngine?                _yara;
         static readonly int               ScanInterval = 30;
 
         // Held during a manual scan so OnAlertRaised can redraw the progress bar
@@ -47,6 +48,12 @@ namespace FNPPAnalyzer
             _filter  = new PostScanFilter(whitelist);
             var engine = new RuleEngine(_broker);
 
+            _yara = new YaraEngine(config.YaraRulesPath);
+            if (_yara.IsLoaded)
+                AnsiConsole.MarkupLine($"[grey]  [[i]] Loaded {_yara.RuleCount} YARA rule(s) from {config.YaraRulesPath}[/]");
+            else
+                AnsiConsole.MarkupLine($"[yellow]  [[!]] No YARA rules loaded from {config.YaraRulesPath} — FILE-005 will be inactive.[/]");
+
             engine.Register(new SystemProcessMasqueradingRule(config));
             engine.Register(new SuspiciousExecutionRule(config));
             engine.Register(new SuspiciousNetworkActivityRule(config));
@@ -59,6 +66,7 @@ namespace FNPPAnalyzer
             engine.Register(new KnownHashRule(config));
             engine.Register(new PeImportRule(config));
             engine.Register(new MemoryInjectionRule(config));
+            engine.Register(new YaraScanRule(_yara, config));
 
             _broker.AlertRaised += OnAlertRaised;
 
@@ -70,6 +78,7 @@ namespace FNPPAnalyzer
 
             _watcher.Stop();
             _watcher.Dispose();
+            _yara.Dispose();
         }
 
         // ── Menu ─────────────────────────────────────────────────────────────
@@ -144,11 +153,29 @@ namespace FNPPAnalyzer
                     {
                         var task = ctx.AddTask("[cyan]Initializing...[/]", maxValue: totalSteps);
 
+                        // File-scanning rules can report a path on every single file — that's
+                        // far too high a refresh rate for the terminal (garbles/overlaps the
+                        // bar). Throttle detail-only ticks and keep the description on one
+                        // line so the task's row height never changes between refreshes.
+                        DateTime lastDetailTick = DateTime.MinValue;
+
                         var reporter = new Progress<ScanProgress>(p =>
                         {
+                            bool isDetailTick = !string.IsNullOrEmpty(p.Detail);
+                            var now = DateTime.UtcNow;
+                            if (isDetailTick)
+                            {
+                                if (now - lastDetailTick < TimeSpan.FromMilliseconds(150)) return;
+                                lastDetailTick = now;
+                            }
+
                             lock (_consoleLock)
                             {
-                                task.Description = $"[grey][[{p.Completed}/{totalSteps}]][/] [cyan]{Markup.Escape(p.Phase)}[/]";
+                                string desc = $"[grey][[{p.Completed}/{totalSteps}]][/] [cyan]{Markup.Escape(p.Phase)}[/]";
+                                if (isDetailTick)
+                                    desc += $" [grey]— {Markup.Escape(TruncatePath(p.Detail!, 64))}[/]";
+
+                                task.Description = desc;
                                 task.Value       = p.Completed;
                                 ctx.Refresh();
                             }
@@ -420,6 +447,21 @@ namespace FNPPAnalyzer
 
             AnsiConsole.Write(panel);
             AnsiConsole.WriteLine();
+        }
+
+        // Elides the middle of long paths so the progress line stays a single row
+        // (e.g. C:\Users\...\AppData\Local\Temp\payload.exe) — keeps the file name visible.
+        static string TruncatePath(string path, int maxLen)
+        {
+            if (path.Length <= maxLen) return path;
+
+            string name = System.IO.Path.GetFileName(path);
+            if (name.Length >= maxLen) return name[^maxLen..];
+
+            int keep = maxLen - name.Length - 1; // 1 for the ellipsis
+            if (keep <= 0) return name;
+
+            return $"{path[..keep]}…{name}";
         }
 
         static void Pause()

@@ -31,6 +31,7 @@ namespace FNPPAnalyzer.Rules.Files
                 {
                     foreach (var file in Directory.GetFiles(dir, "*.*", SearchOption.AllDirectories))
                     {
+                        context.ReportDetail?.Invoke(file);
                         var info = new FileInfo(file);
 
                         // MAL-F1: Double extension (e.g. report.pdf.exe)

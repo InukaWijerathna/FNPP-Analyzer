@@ -116,6 +116,7 @@ namespace FNPPAnalyzer.Rules.Files
                     string? path = proc.MainModule?.FileName;
                     if (string.IsNullOrEmpty(path) || !scanned.Add(path)) continue;
 
+                    context.ReportDetail?.Invoke(path);
                     string? hash = ComputeSha256(path);
                     if (hash != null && _allHashes.Contains(hash))
                         events.Add(MakeEvent(
@@ -137,6 +138,7 @@ namespace FNPPAnalyzer.Rules.Files
                     foreach (var file in Directory.GetFiles(dir, "*.*", SearchOption.AllDirectories))
                     {
                         if (!scanned.Add(file)) continue;
+                        context.ReportDetail?.Invoke(file);
                         string? hash = ComputeSha256(file);
                         if (hash != null && _allHashes.Contains(hash))
                             events.Add(MakeEvent(

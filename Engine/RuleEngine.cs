@@ -7,8 +7,11 @@ using FNPPAnalyzer.Models;
 
 namespace FNPPAnalyzer.Engine
 {
-    /// <summary>Carries one progress tick: how many steps are done, total steps, and current phase label.</summary>
-    public record ScanProgress(int Completed, int Total, string Phase);
+    /// <summary>
+    /// Carries one progress tick: how many steps are done, total steps, current phase label,
+    /// and an optional sub-status detail (e.g. the file path a rule is currently scanning).
+    /// </summary>
+    public record ScanProgress(int Completed, int Total, string Phase, string? Detail = null);
 
     public class RuleEngine
     {
@@ -41,7 +44,12 @@ namespace FNPPAnalyzer.Engine
                 foreach (var rule in _rules)
                 {
                     done++;
-                    progress?.Report(new(done, total, rule.Name));
+                    int stepDone = done;
+                    progress?.Report(new(stepDone, total, rule.Name));
+
+                    // Lets rules surface a sub-status (e.g. the file path being scanned)
+                    // beneath the main phase line without changing the step count.
+                    context.ReportDetail = detail => progress?.Report(new(stepDone, total, rule.Name, detail));
 
                     try
                     {
@@ -63,6 +71,8 @@ namespace FNPPAnalyzer.Engine
                         Console.Error.WriteLine($"[rule:{rule.RuleId}] {ex.Message}");
                     }
                 }
+
+                context.ReportDetail = null;
             }
             finally
             {

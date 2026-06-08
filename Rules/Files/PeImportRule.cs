@@ -76,10 +76,16 @@ namespace FNPPAnalyzer.Rules.Files
                 try
                 {
                     foreach (var file in Directory.GetFiles(dir, "*.exe", SearchOption.TopDirectoryOnly))
+                    {
+                        context.ReportDetail?.Invoke(file);
                         events.AddRange(ScanFile(file));
+                    }
 
                     foreach (var file in Directory.GetFiles(dir, "*.dll", SearchOption.TopDirectoryOnly))
+                    {
+                        context.ReportDetail?.Invoke(file);
                         events.AddRange(ScanFile(file));
+                    }
                 }
                 catch { }
             }
