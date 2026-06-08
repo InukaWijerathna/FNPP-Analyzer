@@ -21,4 +21,13 @@
     <None Include="YaraRules\**\*.yar*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- The test project lives in a subdirectory — exclude it from this project's
+       default globs so its sources/items aren't compiled twice. -->
+  <ItemGroup>
+    <Compile Remove="FNPPAnalyzer.Tests\**\*.cs" />
+    <Content Remove="FNPPAnalyzer.Tests\**\*" />
+    <None Remove="FNPPAnalyzer.Tests\**\*" />
+    <EmbeddedResource Remove="FNPPAnalyzer.Tests\**\*" />
+  </ItemGroup>
+
 </Project>

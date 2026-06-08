@@ -69,20 +69,34 @@ namespace FNPPAnalyzer.Rules.Files
         private const long MaxScanBytes = 64 * 1024 * 1024;
         private const string ExternalIocPath = "iocs.json";
 
-        private readonly HashSet<string> _allHashes;
+        // Built fresh on load/reload and never mutated afterwards — readers can use it
+        // without locking, and Reload() swaps the reference atomically.
+        private volatile HashSet<string> _allHashes;
         private readonly AppConfig _config;
+
+        // Hashing is the most expensive part of this rule — memoize by path+mtime+size so
+        // re-scans of unchanged files (every cycle, every 30s in live monitor) are free.
+        private readonly FileScanCache<string?> _hashCache = new();
 
         public KnownHashRule(AppConfig config)
         {
             _config = config;
-            _allHashes = new HashSet<string>(BuiltInHashes, StringComparer.OrdinalIgnoreCase);
-            LoadExternalIocs();
+            _allHashes = BuildHashSet();
         }
 
-        // Loads extra SHA-256 hashes from iocs.json beside the executable.
+        /// <summary>Re-reads iocs.json from disk, restoring the built-in set first so removed entries take effect.</summary>
+        public void Reload() => _allHashes = BuildHashSet();
+
+        private static HashSet<string> BuildHashSet()
+        {
+            var hashes = new HashSet<string>(BuiltInHashes, StringComparer.OrdinalIgnoreCase);
+            LoadExternalIocs(hashes);
+            return hashes;
+        }
+
+        // Loads extra SHA-256 hashes from iocs.json beside the executable into the given set.
         // Format: { "sha256": ["hash1", "hash2", ...] }
-        // Reload on next instantiation — restart the scanner after updating iocs.json.
-        private void LoadExternalIocs()
+        private static void LoadExternalIocs(HashSet<string> hashes)
         {
             if (!File.Exists(ExternalIocPath)) return;
             try
@@ -94,7 +108,7 @@ namespace FNPPAnalyzer.Rules.Files
                     {
                         string? h = el.GetString();
                         if (!string.IsNullOrWhiteSpace(h))
-                            _allHashes.Add(h.Trim());
+                            hashes.Add(h.Trim());
                     }
             }
             catch (Exception ex)
@@ -117,7 +131,7 @@ namespace FNPPAnalyzer.Rules.Files
                     if (string.IsNullOrEmpty(path) || !scanned.Add(path)) continue;
 
                     context.ReportDetail?.Invoke(path);
-                    string? hash = ComputeSha256(path);
+                    string? hash = HashCached(path);
                     if (hash != null && _allHashes.Contains(hash))
                         events.Add(MakeEvent(
                             $"Running process {proc.ProcessName} matches known malware hash",
@@ -139,7 +153,7 @@ namespace FNPPAnalyzer.Rules.Files
                     {
                         if (!scanned.Add(file)) continue;
                         context.ReportDetail?.Invoke(file);
-                        string? hash = ComputeSha256(file);
+                        string? hash = HashCached(file);
                         if (hash != null && _allHashes.Contains(hash))
                             events.Add(MakeEvent(
                                 $"File matches known malware hash: {Path.GetFileName(file)}",
@@ -164,11 +178,21 @@ namespace FNPPAnalyzer.Rules.Files
             Metadata       = metadata
         };
 
-        private static string? ComputeSha256(string path)
+        private string? HashCached(string path)
         {
             try
             {
                 var info = new FileInfo(path);
+                if (!info.Exists || info.Length > MaxScanBytes) return null;
+                return _hashCache.GetOrCompute(path, info, () => ComputeSha256(path, info));
+            }
+            catch { return null; }
+        }
+
+        private static string? ComputeSha256(string path, FileInfo info)
+        {
+            try
+            {
                 if (!info.Exists || info.Length > MaxScanBytes) return null;
                 using var sha    = SHA256.Create();
                 using var stream = File.OpenRead(path);

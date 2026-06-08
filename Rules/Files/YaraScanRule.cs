@@ -22,6 +22,11 @@ namespace FNPPAnalyzer.Rules.Files
         private readonly YaraEngine _yara;
         private readonly AppConfig _config;
 
+        // YARA scanning is the most expensive part of this rule — memoize per file by
+        // path+mtime+size so re-scans of unchanged files (every cycle, every 30s in live
+        // monitor) are free.
+        private readonly FileScanCache<IReadOnlyList<YaraRuleMatch>> _matchCache = new();
+
         public YaraScanRule(YaraEngine yara, AppConfig config)
         {
             _yara = yara;
@@ -67,19 +72,30 @@ namespace FNPPAnalyzer.Rules.Files
                 catch (Exception ex) { Console.Error.WriteLine($"[FILE-005] {dir}: {ex.Message}"); }
             }
 
+            // 3. In-memory scan of processes running from untrusted locations — catches
+            // fileless/in-memory payloads (reflective loading, process hollowing) that
+            // never touch disk in a form the on-disk scan above would see. Scoped to
+            // processes outside TrustedExecutionPaths since scanning every process's
+            // memory every cycle would be far too costly for live monitoring.
+            foreach (var proc in context.Processes)
+            {
+                try
+                {
+                    string? path = proc.MainModule?.FileName;
+                    if (string.IsNullOrEmpty(path) || StartsWithTrustedPath(path)) continue;
+
+                    context.ReportDetail?.Invoke($"{proc.ProcessName} (PID {proc.Id}) [memory]");
+                    ScanProcessMemoryAndCollect(proc.Id, proc.ProcessName, path, events);
+                }
+                catch { }
+            }
+
             return events;
         }
 
         private void ScanAndCollect(string path, List<DetectionEvent> events, int? processId = null, string? processName = null)
         {
-            try
-            {
-                var info = new FileInfo(path);
-                if (!info.Exists || info.Length > MaxScanBytes) return;
-            }
-            catch { return; }
-
-            foreach (var match in _yara.ScanFile(path))
+            foreach (var match in ScanFileCached(path))
             {
                 string desc = processId.HasValue
                     ? $"Process {processName} ({path}) matches YARA rule '{match.Identifier}'"
@@ -103,6 +119,49 @@ namespace FNPPAnalyzer.Rules.Files
                     }
                 });
             }
+        }
+
+        private void ScanProcessMemoryAndCollect(int processId, string processName, string path, List<DetectionEvent> events)
+        {
+            foreach (var match in _yara.ScanProcess(processId))
+            {
+                events.Add(new DetectionEvent
+                {
+                    RuleId         = "FILE-005",
+                    RuleName       = $"YARA Match: {match.Identifier}",
+                    Severity       = ResolveSeverity(match),
+                    Type           = ResolveType(match),
+                    Description    = $"Process {processName} (PID {processId}) memory matches YARA rule '{match.Identifier}'",
+                    ExecutablePath = path,
+                    Metadata       = new
+                    {
+                        Path = path,
+                        ProcessId = processId,
+                        Rule = match.Identifier,
+                        Tags = match.Tags,
+                        MatchedStrings = match.MatchedStrings,
+                        Scope = "memory"
+                    }
+                });
+            }
+        }
+
+        private bool StartsWithTrustedPath(string path)
+        {
+            foreach (var t in _config.TrustedExecutionPaths)
+                if (path.StartsWith(t, StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+
+        private IReadOnlyList<YaraRuleMatch> ScanFileCached(string path)
+        {
+            try
+            {
+                var info = new FileInfo(path);
+                if (!info.Exists || info.Length > MaxScanBytes) return [];
+                return _matchCache.GetOrCompute(path, info, () => _yara.ScanFile(path));
+            }
+            catch { return []; }
         }
 
         private static AlertSeverity ResolveSeverity(YaraRuleMatch match) =>

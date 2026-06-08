@@ -37,6 +37,17 @@ namespace FNPPAnalyzer.Engine
             }
         }
 
+        /// <summary>Re-reads the whitelist file from disk, replacing the in-memory set.</summary>
+        public void Reload()
+        {
+            var fresh = Load(_filePath);
+            lock (_lock)
+            {
+                _paths.Clear();
+                foreach (var p in fresh) _paths.Add(p);
+            }
+        }
+
         public IReadOnlyCollection<string> GetAll()
         {
             lock (_lock) return new HashSet<string>(_paths, StringComparer.OrdinalIgnoreCase);
