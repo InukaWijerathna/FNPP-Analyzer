@@ -113,7 +113,7 @@ namespace FNPPAnalyzer.Rules.Files
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine($"[FILE-003] Failed to load iocs.json: {ex.Message}");
+                lock (ConsoleSync.Lock) Console.Error.WriteLine($"[FILE-003] Failed to load iocs.json: {ex.Message}");
             }
         }
 
@@ -127,8 +127,7 @@ namespace FNPPAnalyzer.Rules.Files
             {
                 try
                 {
-                    string? path = proc.MainModule?.FileName;
-                    if (string.IsNullOrEmpty(path) || !scanned.Add(path)) continue;
+                    if (!context.ProcessPaths.TryGetValue(proc.Id, out string? path) || !scanned.Add(path)) continue;
 
                     context.ReportDetail?.Invoke(path);
                     string? hash = HashCached(path);
@@ -145,23 +144,19 @@ namespace FNPPAnalyzer.Rules.Files
             foreach (var rawPath in _config.UntrustedExecutionPaths)
             {
                 string dir = Environment.ExpandEnvironmentVariables(rawPath);
-                if (!Directory.Exists(dir)) continue;
+                if (!context.UntrustedDirectoryFiles.TryGetValue(dir, out var files)) continue;
 
-                try
+                foreach (var file in files)
                 {
-                    foreach (var file in Directory.GetFiles(dir, "*.*", SearchOption.AllDirectories))
-                    {
-                        if (!scanned.Add(file)) continue;
-                        context.ReportDetail?.Invoke(file);
-                        string? hash = HashCached(file);
-                        if (hash != null && _allHashes.Contains(hash))
-                            events.Add(MakeEvent(
-                                $"File matches known malware hash: {Path.GetFileName(file)}",
-                                new { Path = file, SHA256 = hash },
-                                file));
-                    }
+                    if (!scanned.Add(file)) continue;
+                    context.ReportDetail?.Invoke(file);
+                    string? hash = HashCached(file);
+                    if (hash != null && _allHashes.Contains(hash))
+                        events.Add(MakeEvent(
+                            $"File matches known malware hash: {Path.GetFileName(file)}",
+                            new { Path = file, SHA256 = hash },
+                            file));
                 }
-                catch (Exception ex) { Console.Error.WriteLine($"[FILE-003] {dir}: {ex.Message}"); }
             }
 
             return events;

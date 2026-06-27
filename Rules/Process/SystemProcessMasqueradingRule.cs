@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using FNPPAnalyzer.Config;
 using FNPPAnalyzer.Engine;
 using FNPPAnalyzer.Models;
@@ -12,6 +13,9 @@ namespace FNPPAnalyzer.Rules.Process
         public string RuleId => "PROC-001";
         public string Name => "System Process Masquerading";
         public string Description => "Detects system process names running outside their expected paths.";
+
+        private static readonly string ExplorerPath =
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe");
 
         private readonly AppConfig _config;
 
@@ -28,12 +32,11 @@ namespace FNPPAnalyzer.Rules.Process
                     string procName = proc.ProcessName.ToLower();
                     if (!_config.TrustedSystemProcesses.Contains(procName + ".exe")) continue;
 
-                    string? path = proc.MainModule?.FileName;
-                    if (string.IsNullOrEmpty(path)) continue;
+                    if (!context.ProcessPaths.TryGetValue(proc.Id, out string? path)) continue;
 
                     bool isLegit = procName == "explorer"
-                        ? path.Equals(@"C:\WINDOWS\explorer.exe", StringComparison.OrdinalIgnoreCase)
-                        : StartsWithTrustedPath(path);
+                        ? path.Equals(ExplorerPath, StringComparison.OrdinalIgnoreCase)
+                        : PathTrust.IsUnderTrustedPath(path, _config.TrustedExecutionPaths);
 
                     if (!isLegit)
                         events.Add(new DetectionEvent
@@ -50,13 +53,6 @@ namespace FNPPAnalyzer.Rules.Process
                 catch { }
             }
             return events;
-        }
-
-        private bool StartsWithTrustedPath(string path)
-        {
-            foreach (var t in _config.TrustedExecutionPaths)
-                if (path.StartsWith(t, StringComparison.OrdinalIgnoreCase)) return true;
-            return false;
         }
     }
 }

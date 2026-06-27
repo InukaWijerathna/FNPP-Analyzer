@@ -31,7 +31,6 @@ namespace FNPPAnalyzer
         // Held during a manual scan so OnAlertRaised can redraw the progress bar
         // after writing alert text, preventing the auto-refresh timer from corrupting output.
         static ProgressContext?           _progressCtx;
-        static readonly object            _consoleLock = new();
 
         static void Main()
         {
@@ -50,7 +49,7 @@ namespace FNPPAnalyzer
             _whitelist = new SignatureWhitelist("whitelist.json");
             _broker  = new AlertBroker("alerts.log", _whitelist);
             _filter  = new PostScanFilter(_whitelist);
-            var engine = new RuleEngine(_broker);
+            var engine = new RuleEngine(_broker, config);
 
             _yara = new YaraEngine(config.YaraRulesPath);
             if (_yara.IsLoaded)
@@ -109,7 +108,8 @@ namespace FNPPAnalyzer
                             "5.  Status          (scanner state & statistics)",
                             "6.  Reload Rules    (reload IOCs, whitelist & YARA rules)",
                             "7.  Clear           (clear screen & redraw banner)",
-                            "8.  Quit"
+                            "8.  Open Log File   (open alerts.log)",
+                            "9.  Quit"
                         ));
 
                 switch (choice[0])
@@ -121,7 +121,8 @@ namespace FNPPAnalyzer
                     case '5': StatusView();               break;
                     case '6': ReloadRulesView();          break;
                     case '7': AnsiConsole.Clear(); PrintBanner(); break;
-                    case '8':
+                    case '8': OpenLogFileView();          break;
+                    case '9':
                         StopMonitor();
                         _scanTask?.Wait(2000);
                         AnsiConsole.WriteLine();
@@ -183,7 +184,7 @@ namespace FNPPAnalyzer
                                 lastDetail     = p.Detail;
                             }
 
-                            lock (_consoleLock)
+                            lock (ConsoleSync.Lock)
                             {
                                 string line1 = $"[grey][[{p.Completed}/{totalSteps}]][/] [cyan]{Markup.Escape(p.Phase)}[/]";
 
@@ -206,14 +207,14 @@ namespace FNPPAnalyzer
 
                         engine.RunCycle(reporter);
 
-                        lock (_consoleLock)
+                        lock (ConsoleSync.Lock)
                         {
                             task.Description = $"[grey][[{totalSteps - 1}/{totalSteps}]][/] [cyan]Verifying signatures...[/]\n";
                             task.Value       = totalSteps - 1;
                             ctx.Refresh();
                         }
                         result = _filter!.Process(_broker.GetFrom(priorCount));
-                        lock (_consoleLock)
+                        lock (ConsoleSync.Lock)
                         {
                             task.Value = totalSteps;
                             ctx.Refresh();
@@ -404,6 +405,32 @@ namespace FNPPAnalyzer
             Pause();
         }
 
+        static void OpenLogFileView()
+        {
+            AnsiConsole.WriteLine();
+            AnsiConsole.Write(new Rule("[bold cyan]Open Log File[/]").RuleStyle("grey"));
+
+            string logPath = _broker!.LogPath;
+
+            if (!System.IO.File.Exists(logPath))
+            {
+                AnsiConsole.MarkupLine("[yellow]  [[!]] No log file has been created yet — run a scan first.[/]");
+                Pause();
+                return;
+            }
+
+            try
+            {
+                Process.Start(new ProcessStartInfo(logPath) { UseShellExecute = true });
+                AnsiConsole.MarkupLine($"[green]  [[+]] Opened {Markup.Escape(logPath)} in the default application.[/]");
+            }
+            catch (Exception ex)
+            {
+                AnsiConsole.MarkupLine($"[red]  [[x]] Failed to open log file: {Markup.Escape(ex.Message)}[/]");
+            }
+            Pause();
+        }
+
         static void ReloadRulesView()
         {
             AnsiConsole.WriteLine();
@@ -452,7 +479,7 @@ namespace FNPPAnalyzer
             string desc = alert.Description;
             if (desc.Length > 110) desc = desc[..107] + "…";
 
-            lock (_consoleLock)
+            lock (ConsoleSync.Lock)
             {
                 AnsiConsole.WriteLine();
                 AnsiConsole.MarkupLine(

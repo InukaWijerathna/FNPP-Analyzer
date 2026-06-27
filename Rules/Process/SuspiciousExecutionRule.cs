@@ -28,8 +28,7 @@ namespace FNPPAnalyzer.Rules.Process
             {
                 try
                 {
-                    if (proc.MainModule == null) continue;
-                    string exePath = proc.MainModule.FileName;
+                    if (!context.ProcessPaths.TryGetValue(proc.Id, out string? exePath)) continue;
                     string procName = proc.ProcessName.ToLower();
                     bool isScriptEngine = Array.Exists(ScriptEngines, e => procName.Contains(e));
 
@@ -71,7 +70,7 @@ namespace FNPPAnalyzer.Rules.Process
                 }
                 catch (System.ComponentModel.Win32Exception) { } // access denied on protected processes — expected
                 catch (InvalidOperationException) { }            // process exited between enumeration and access
-                catch (Exception ex) { Console.Error.WriteLine($"[PROC-002/003] PID {proc.Id}: {ex.GetType().Name}: {ex.Message}"); }
+                catch (Exception ex) { lock (ConsoleSync.Lock) Console.Error.WriteLine($"[PROC-002/003] PID {proc.Id}: {ex.GetType().Name}: {ex.Message}"); }
             }
             return events;
         }

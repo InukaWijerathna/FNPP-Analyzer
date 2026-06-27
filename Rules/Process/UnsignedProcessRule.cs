@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using FNPPAnalyzer.Config;
 using FNPPAnalyzer.Engine;
 using FNPPAnalyzer.Models;
@@ -16,20 +17,24 @@ namespace FNPPAnalyzer.Rules.Process
         public string Name => "Unsigned System Process";
         public string Description => "Detects unsigned executables running from Windows system directories.";
 
+        private static readonly string WindowsDir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        private static readonly string System32Dir = Environment.GetFolderPath(Environment.SpecialFolder.System);
+        private static readonly string SysWow64Dir = Environment.GetFolderPath(Environment.SpecialFolder.SystemX86);
+
         // Legitimate OEM/driver paths — always skip, they contain third-party signed binaries
         private static readonly string[] ExcludedPrefixes =
         [
-            @"C:\Windows\System32\DriverStore\",
-            @"C:\Windows\SysWOW64\DriverStore\",
-            @"C:\Windows\SystemApps\",
-            @"C:\Windows\WinSxS\",
+            Path.Combine(System32Dir, "DriverStore"),
+            Path.Combine(SysWow64Dir, "DriverStore"),
+            Path.Combine(WindowsDir, "SystemApps"),
+            Path.Combine(WindowsDir, "WinSxS"),
         ];
 
         private static readonly string[] SystemPrefixes =
         [
-            @"C:\Windows\System32\",
-            @"C:\Windows\SysWOW64\",
-            @"C:\Windows\",
+            System32Dir,
+            SysWow64Dir,
+            WindowsDir,
         ];
 
         private readonly AppConfig _config;
@@ -50,21 +55,11 @@ namespace FNPPAnalyzer.Rules.Process
                     string procName = proc.ProcessName.ToLower();
                     if (!_config.TrustedSystemProcesses.Contains(procName + ".exe")) continue;
 
-                    string? path = proc.MainModule?.FileName;
-                    if (string.IsNullOrEmpty(path) || !checked_.Add(path)) continue;
+                    if (!context.ProcessPaths.TryGetValue(proc.Id, out string? path) || !checked_.Add(path)) continue;
 
                     // Skip DriverStore, SystemApps, WinSxS — OEM / packaged-app territory
-                    bool excluded = false;
-                    foreach (var prefix in ExcludedPrefixes)
-                        if (path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                        { excluded = true; break; }
-                    if (excluded) continue;
-
-                    bool inSystem = false;
-                    foreach (var prefix in SystemPrefixes)
-                        if (path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                        { inSystem = true; break; }
-                    if (!inSystem) continue;
+                    if (PathTrust.IsUnderTrustedPath(path, ExcludedPrefixes)) continue;
+                    if (!PathTrust.IsUnderTrustedPath(path, SystemPrefixes)) continue;
 
                     if (AuthenticodeVerifier.Verify(path) != SignatureStatus.Valid)
                         events.Add(new DetectionEvent

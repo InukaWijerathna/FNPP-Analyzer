@@ -115,18 +115,9 @@ namespace FNPPAnalyzer.Rules.Network
             // Uses PID-aware TCP table when available.
             if (pidConns.Count > 0)
             {
-                // Build pid → process-path map from the existing Process snapshot
-                var pidToPath = new Dictionary<int, string>(context.Processes.Length);
-                foreach (var proc in context.Processes)
-                {
-                    try
-                    {
-                        string? path = proc.MainModule?.FileName;
-                        if (!string.IsNullOrEmpty(path))
-                            pidToPath[proc.Id] = path;
-                    }
-                    catch { }
-                }
+                // ScanContext already resolved every process's executable path once —
+                // reuse it instead of re-walking MainModule for this rule too.
+                var pidToPath = context.ProcessPaths;
 
                 foreach (var c in pidConns)
                 {

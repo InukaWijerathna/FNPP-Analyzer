@@ -44,7 +44,7 @@ namespace FNPPAnalyzer.Engine
             try { _watcher.Start(); }
             catch (Exception ex)
             {
-                Console.Error.WriteLine($"[ProcessCreationWatcher] Could not start: {ex.Message}");
+                lock (ConsoleSync.Lock) Console.Error.WriteLine($"[ProcessCreationWatcher] Could not start: {ex.Message}");
             }
         }
 

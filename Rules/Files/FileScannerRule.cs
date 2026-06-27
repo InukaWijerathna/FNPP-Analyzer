@@ -25,11 +25,11 @@ namespace FNPPAnalyzer.Rules.Files
             foreach (var rawPath in _config.UntrustedExecutionPaths)
             {
                 string dir = Environment.ExpandEnvironmentVariables(rawPath);
-                if (!Directory.Exists(dir)) continue;
+                if (!context.UntrustedDirectoryFiles.TryGetValue(dir, out var files)) continue;
 
-                try
+                foreach (var file in files)
                 {
-                    foreach (var file in Directory.GetFiles(dir, "*.*", SearchOption.AllDirectories))
+                    try
                     {
                         context.ReportDetail?.Invoke(file);
                         var info = new FileInfo(file);
@@ -64,9 +64,9 @@ namespace FNPPAnalyzer.Rules.Files
                                 Metadata       = new { Path = file }
                             });
                     }
+                    catch (UnauthorizedAccessException) { }  // file's attributes unreadable — expected
+                    catch (Exception ex) { lock (ConsoleSync.Lock) Console.Error.WriteLine($"[FILE-001/002] {file}: {ex.GetType().Name}: {ex.Message}"); }
                 }
-                catch (UnauthorizedAccessException) { }  // can't read some subdirectories — expected
-                catch (Exception ex) { Console.Error.WriteLine($"[FILE-001/002] {dir}: {ex.GetType().Name}: {ex.Message}"); }
             }
             return events;
         }

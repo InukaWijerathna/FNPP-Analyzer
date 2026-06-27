@@ -177,7 +177,7 @@ namespace FNPPAnalyzer.Rules.Persistence
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine($"[PERS-002] schtasks failed: {ex.Message}");
+                lock (ConsoleSync.Lock) Console.Error.WriteLine($"[PERS-002] schtasks failed: {ex.Message}");
                 return null;
             }
         }

@@ -52,7 +52,7 @@ namespace FNPPAnalyzer.Rules.Persistence
                     }
                     catch (System.Security.SecurityException) { }  // access denied on HKLM keys without elevation
                     catch (UnauthorizedAccessException) { }
-                    catch (Exception ex) { Console.Error.WriteLine($"[PERS-001] {keyPath}: {ex.GetType().Name}: {ex.Message}"); }
+                    catch (Exception ex) { lock (ConsoleSync.Lock) Console.Error.WriteLine($"[PERS-001] {keyPath}: {ex.GetType().Name}: {ex.Message}"); }
                 }
             }
             return events;

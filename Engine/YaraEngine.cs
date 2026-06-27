@@ -87,7 +87,7 @@ namespace FNPPAnalyzer.Engine
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine($"[YARA] Failed to compile rules from {rulesDirectory}: {ex.Message}");
+                lock (ConsoleSync.Lock) Console.Error.WriteLine($"[YARA] Failed to compile rules from {rulesDirectory}: {ex.Message}");
                 return null;
             }
         }

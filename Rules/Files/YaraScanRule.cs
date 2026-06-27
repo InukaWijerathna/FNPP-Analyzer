@@ -45,8 +45,7 @@ namespace FNPPAnalyzer.Rules.Files
             {
                 try
                 {
-                    string? path = proc.MainModule?.FileName;
-                    if (string.IsNullOrEmpty(path) || !scanned.Add(path)) continue;
+                    if (!context.ProcessPaths.TryGetValue(proc.Id, out string? path) || !scanned.Add(path)) continue;
 
                     context.ReportDetail?.Invoke(path);
                     ScanAndCollect(path, events, processId: proc.Id, processName: proc.ProcessName);
@@ -58,18 +57,14 @@ namespace FNPPAnalyzer.Rules.Files
             foreach (var rawPath in _config.UntrustedExecutionPaths)
             {
                 string dir = Environment.ExpandEnvironmentVariables(rawPath);
-                if (!Directory.Exists(dir)) continue;
+                if (!context.UntrustedDirectoryFiles.TryGetValue(dir, out var files)) continue;
 
-                try
+                foreach (var file in files)
                 {
-                    foreach (var file in Directory.GetFiles(dir, "*.*", SearchOption.AllDirectories))
-                    {
-                        if (!scanned.Add(file)) continue;
-                        context.ReportDetail?.Invoke(file);
-                        ScanAndCollect(file, events);
-                    }
+                    if (!scanned.Add(file)) continue;
+                    context.ReportDetail?.Invoke(file);
+                    ScanAndCollect(file, events);
                 }
-                catch (Exception ex) { Console.Error.WriteLine($"[FILE-005] {dir}: {ex.Message}"); }
             }
 
             // 3. In-memory scan of processes running from untrusted locations — catches
@@ -81,8 +76,8 @@ namespace FNPPAnalyzer.Rules.Files
             {
                 try
                 {
-                    string? path = proc.MainModule?.FileName;
-                    if (string.IsNullOrEmpty(path) || StartsWithTrustedPath(path)) continue;
+                    if (!context.ProcessPaths.TryGetValue(proc.Id, out string? path) ||
+                        PathTrust.IsUnderTrustedPath(path, _config.TrustedExecutionPaths)) continue;
 
                     context.ReportDetail?.Invoke($"{proc.ProcessName} (PID {proc.Id}) [memory]");
                     ScanProcessMemoryAndCollect(proc.Id, proc.ProcessName, path, events);
@@ -144,13 +139,6 @@ namespace FNPPAnalyzer.Rules.Files
                     }
                 });
             }
-        }
-
-        private bool StartsWithTrustedPath(string path)
-        {
-            foreach (var t in _config.TrustedExecutionPaths)
-                if (path.StartsWith(t, StringComparison.OrdinalIgnoreCase)) return true;
-            return false;
         }
 
         private IReadOnlyList<YaraRuleMatch> ScanFileCached(string path)
