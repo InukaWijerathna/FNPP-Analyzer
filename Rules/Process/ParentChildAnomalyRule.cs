@@ -30,36 +30,31 @@ namespace FNPPAnalyzer.Rules.Process
         public IReadOnlyList<DetectionEvent> Evaluate(ScanContext context)
         {
             // Build PID → name map from current snapshot
-            var pidToName = new Dictionary<int, string>(context.Processes.Length);
+            var pidToName = new Dictionary<int, string>(context.Processes.Count);
             foreach (var proc in context.Processes)
-                try { pidToName[proc.Id] = proc.ProcessName.ToLower(); } catch { }
+                pidToName[proc.Pid] = proc.Name.ToLower();
 
             var events = new List<DetectionEvent>();
 
             foreach (var proc in context.Processes)
             {
-                try
-                {
-                    string childName = proc.ProcessName.ToLower();
-                    if (!Array.Exists(SuspiciousChildren, c => childName.Contains(c))) continue;
-                    if (!context.ParentPids.TryGetValue(proc.Id, out int parentPid)) continue;
-                    if (!pidToName.TryGetValue(parentPid, out string? parentName)) continue;
+                string childName = proc.Name.ToLower();
+                if (!Array.Exists(SuspiciousChildren, c => childName.Contains(c))) continue;
+                if (proc.ParentPid is not int parentPid) continue;
+                if (!pidToName.TryGetValue(parentPid, out string? parentName)) continue;
 
-                    if (Array.Exists(HighRiskParents, p => parentName.Contains(p)))
+                if (Array.Exists(HighRiskParents, p => parentName.Contains(p)))
+                {
+                    events.Add(new DetectionEvent
                     {
-                        context.ProcessCommandLines.TryGetValue(proc.Id, out string? cmdLine);
-                        events.Add(new DetectionEvent
-                        {
-                            RuleId = RuleId,
-                            RuleName = Name,
-                            Severity = AlertSeverity.High,
-                            Type = AlertType.TROJ,
-                            Description = $"{parentName} spawned {proc.ProcessName} — likely macro or exploit execution.",
-                            Metadata = new { Parent = parentName, ChildPid = proc.Id, CommandLine = cmdLine }
-                        });
-                    }
+                        RuleId = RuleId,
+                        RuleName = Name,
+                        Severity = AlertSeverity.High,
+                        Type = AlertType.TROJ,
+                        Description = $"{parentName} spawned {proc.Name} — likely macro or exploit execution.",
+                        Metadata = new { Parent = parentName, ChildPid = proc.Pid, CommandLine = proc.CommandLine }
+                    });
                 }
-                catch { }
             }
             return events;
         }

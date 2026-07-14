@@ -72,18 +72,22 @@ namespace FNPPAnalyzer.Engine
 
         private void CheckNewProcess(string name, string cmd, string path, int pid)
         {
-            // 1. Executable launched from untrusted directory
-            foreach (var raw in _config.UntrustedExecutionPaths)
+            // 1. Executable launched from untrusted directory.
+            // PathTrust adds the directory boundary a bare StartsWith lacks —
+            // "C:\Temp" must not match "C:\Temporary\x.exe".
+            if (!string.IsNullOrEmpty(path))
             {
-                string dir = Environment.ExpandEnvironmentVariables(raw);
-                if (!string.IsNullOrEmpty(path) &&
-                    path.StartsWith(dir, StringComparison.OrdinalIgnoreCase))
+                foreach (var raw in _config.UntrustedExecutionPaths)
                 {
-                    Submit("PROC-RT-001", "Process from Untrusted Path (Real-Time)",
-                        AlertSeverity.Medium, AlertType.MAL,
-                        $"New process from untrusted path detected in real-time: {path}",
-                        path, pid);
-                    return;
+                    string dir = Environment.ExpandEnvironmentVariables(raw);
+                    if (PathTrust.IsUnderTrustedPath(path, [dir]))
+                    {
+                        Submit("PROC-RT-001", "Process from Untrusted Path (Real-Time)",
+                            AlertSeverity.Medium, AlertType.MAL,
+                            $"New process from untrusted path detected in real-time: {path}",
+                            path, pid);
+                        return;
+                    }
                 }
             }
 

@@ -7,25 +7,23 @@ namespace FNPPAnalyzer.Tests;
 public class AlertBrokerTests : IDisposable
 {
     private readonly string _logPath = Path.Combine(Path.GetTempPath(), $"fnpp_broker_test_{Guid.NewGuid():N}.log");
-    private readonly string _whitelistPath = Path.Combine(Path.GetTempPath(), $"fnpp_broker_wl_{Guid.NewGuid():N}.json");
 
     public void Dispose()
     {
         try { File.Delete(_logPath); } catch { }
-        try { File.Delete(_whitelistPath); } catch { }
     }
 
-    private static Alert MakeAlert(string ruleId, string path) => new()
+    private static Alert MakeAlert(string ruleId, string path, string description = "test", string? dedupeKey = null) => new()
     {
         RuleId         = ruleId,
         Title          = ruleId,
-        Description    = "test",
+        Description    = description,
         Severity       = AlertSeverity.Medium,
-        ExecutablePath = path
+        ExecutablePath = path,
+        DedupeKey      = dedupeKey
     };
 
-    private AlertBroker NewBroker(TimeSpan cooldown, SignatureWhitelist? whitelist = null) =>
-        new(_logPath, whitelist ?? new SignatureWhitelist(_whitelistPath), cooldown);
+    private AlertBroker NewBroker(TimeSpan cooldown) => new(_logPath, cooldown);
 
     [Fact]
     public void RepeatedAlert_WithinCooldown_IsDropped()
@@ -62,26 +60,43 @@ public class AlertBrokerTests : IDisposable
     }
 
     [Fact]
-    public void HighTrustRule_BypassesWhitelistGate_EvenWhenPathAlreadyWhitelisted()
+    public void DedupeKey_WinsOverVolatileDescription()
     {
-        var whitelist = new SignatureWhitelist(_whitelistPath);
-        whitelist.Add(@"C:\Windows\System32\svchost.exe");
-        var broker = NewBroker(TimeSpan.FromMinutes(10), whitelist);
+        // NET-002/NET-003-style alerts embed live counts in the description; without a
+        // DedupeKey they would re-fire every cycle because the fingerprint never repeats.
+        var broker = NewBroker(TimeSpan.FromMinutes(10));
 
-        broker.Submit(MakeAlert("PROC-001", @"C:\Windows\System32\svchost.exe"));
+        broker.Submit(MakeAlert("NET-003", "", "High TCP connection count: 137", dedupeKey: "connection-burst"));
+        broker.Submit(MakeAlert("NET-003", "", "High TCP connection count: 145", dedupeKey: "connection-burst"));
 
         Assert.Single(broker.GetAll());
     }
 
     [Fact]
-    public void LowTrustRule_OnWhitelistedPath_IsDroppedSilently()
+    public void PathlessAlert_WithoutDedupeKey_FallsBackToDescription()
     {
-        var whitelist = new SignatureWhitelist(_whitelistPath);
-        whitelist.Add(@"C:\Windows\System32\svchost.exe");
-        var broker = NewBroker(TimeSpan.FromMinutes(10), whitelist);
+        var broker = NewBroker(TimeSpan.FromMinutes(10));
 
-        broker.Submit(MakeAlert("PROC-002", @"C:\Windows\System32\svchost.exe"));
+        broker.Submit(MakeAlert("PERS-001", "", "entry A"));
+        broker.Submit(MakeAlert("PERS-001", "", "entry B"));
+        broker.Submit(MakeAlert("PERS-001", "", "entry A"));
 
-        Assert.Empty(broker.GetAll());
+        Assert.Equal(2, broker.GetAll().Count);
+    }
+
+    [Fact]
+    public void SuppressedAlert_IsStored_ButDoesNotRaiseTheLiveEvent()
+    {
+        var broker = NewBroker(TimeSpan.FromMinutes(10));
+        int raised = 0;
+        broker.AlertRaised += _ => raised++;
+
+        var suppressed = MakeAlert("PROC-002", @"C:\Temp\signed.exe");
+        suppressed.Suppressed = true;
+        broker.Submit(suppressed);
+        broker.Submit(MakeAlert("PROC-002", @"C:\Temp\other.exe"));
+
+        Assert.Equal(2, broker.GetAll().Count);
+        Assert.Equal(1, raised);
     }
 }

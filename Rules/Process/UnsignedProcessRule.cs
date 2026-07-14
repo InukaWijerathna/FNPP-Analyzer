@@ -48,32 +48,29 @@ namespace FNPPAnalyzer.Rules.Process
 
             foreach (var proc in context.Processes)
             {
-                try
-                {
-                    // Only check processes whose name appears in TrustedSystemProcesses —
-                    // everything else (OEM tools, third-party utilities) is expected to vary.
-                    string procName = proc.ProcessName.ToLower();
-                    if (!_config.TrustedSystemProcesses.Contains(procName + ".exe")) continue;
+                // Only check processes whose name appears in TrustedSystemProcesses —
+                // everything else (OEM tools, third-party utilities) is expected to vary.
+                string procName = proc.Name.ToLower();
+                if (!_config.TrustedSystemProcesses.Contains(procName + ".exe")) continue;
 
-                    if (!context.ProcessPaths.TryGetValue(proc.Id, out string? path) || !checked_.Add(path)) continue;
+                string? path = proc.ExecutablePath;
+                if (path == null || !checked_.Add(path)) continue;
 
-                    // Skip DriverStore, SystemApps, WinSxS — OEM / packaged-app territory
-                    if (PathTrust.IsUnderTrustedPath(path, ExcludedPrefixes)) continue;
-                    if (!PathTrust.IsUnderTrustedPath(path, SystemPrefixes)) continue;
+                // Skip DriverStore, SystemApps, WinSxS — OEM / packaged-app territory
+                if (PathTrust.IsUnderTrustedPath(path, ExcludedPrefixes)) continue;
+                if (!PathTrust.IsUnderTrustedPath(path, SystemPrefixes)) continue;
 
-                    if (AuthenticodeVerifier.Verify(path) != SignatureStatus.Valid)
-                        events.Add(new DetectionEvent
-                        {
-                            RuleId         = RuleId,
-                            RuleName       = Name,
-                            Severity       = AlertSeverity.High,
-                            Type           = AlertType.MAL,
-                            Description    = $"Unsigned executable in system path: {proc.ProcessName} ({path})",
-                            ExecutablePath = path,
-                            Metadata       = new { ProcessId = proc.Id, Path = path }
-                        });
-                }
-                catch { }
+                if (AuthenticodeVerifier.Verify(path) != SignatureStatus.Valid)
+                    events.Add(new DetectionEvent
+                    {
+                        RuleId         = RuleId,
+                        RuleName       = Name,
+                        Severity       = AlertSeverity.High,
+                        Type           = AlertType.MAL,
+                        Description    = $"Unsigned executable in system path: {proc.Name} ({path})",
+                        ExecutablePath = path,
+                        Metadata       = new { ProcessId = proc.Pid, Path = path }
+                    });
             }
             return events;
         }

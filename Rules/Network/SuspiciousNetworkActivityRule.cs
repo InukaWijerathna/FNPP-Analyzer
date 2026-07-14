@@ -16,25 +16,6 @@ namespace FNPPAnalyzer.Rules.Network
         public string Name => "Network Anomaly Detection";
         public string Description => "Detects suspicious outbound connections, port scanning, and traffic bursts.";
 
-        // NET-001: Known C2/RAT/tunneling ports.
-        // Sources: Metasploit defaults (4444-4446), Cobalt Strike (50050), Sliver (31337/8888),
-        //          Havoc (40056), Empire (5000), IRC (6667/6697), Tor circuits (9001/9030/9050/9051),
-        //          Radmin (4899), VNC plaintext (5900-5901), SOCKS5 (1080).
-        private static readonly int[] SuspiciousPorts =
-        [
-            4444, 4445, 4446,       // Metasploit reverse handlers
-            6667, 6697,             // IRC (DarkComet, njRAT C2)
-            1337, 31337,            // "leet" RAT defaults
-            50050,                  // Cobalt Strike team-server
-            40056,                  // Havoc C2 default
-            8888,                   // Sliver/various RATs
-            9001, 9030, 9050, 9051, // Tor relay/SOCKS ports
-            4899,                   // Radmin remote-admin tool
-            5900, 5901,             // VNC (unencrypted remote access)
-            1080,                   // SOCKS5 proxy tunneling
-            5000,                   // Empire/PowerShell Empire default
-        ];
-
         // NET-004: Processes that have established connections to external IPs
         // while their executable lives in a user-writable directory.
         private static readonly string[] UntrustedPathFragments =
@@ -65,11 +46,11 @@ namespace FNPPAnalyzer.Rules.Network
             var conns   = context.TcpConnections;
             var pidConns = context.TcpConnectionsWithPid;
 
-            // HIDS-N1: Known C2/RAT ports
+            // HIDS-N1: Known C2/RAT ports (list configurable via config.json SuspiciousPorts)
             foreach (var conn in conns)
             {
                 if ((conn.State == TcpState.Established || conn.State == TcpState.SynSent)
-                    && SuspiciousPorts.Contains(conn.RemoteEndPoint.Port))
+                    && _config.SuspiciousPorts.Contains(conn.RemoteEndPoint.Port))
                 {
                     events.Add(new DetectionEvent
                     {
@@ -78,25 +59,30 @@ namespace FNPPAnalyzer.Rules.Network
                         Severity    = AlertSeverity.High,
                         Type        = AlertType.TROJ,
                         Description = $"Connection to suspicious port {conn.RemoteEndPoint.Port} at {conn.RemoteEndPoint.Address}",
+                        DedupeKey   = $"{conn.RemoteEndPoint.Address}:{conn.RemoteEndPoint.Port}",
                         Metadata    = new { Local = conn.LocalEndPoint.ToString(), Remote = conn.RemoteEndPoint.ToString() }
                     });
                 }
             }
 
-            // HIDS-N2: One remote IP connected to many distinct local ports → port scan
-            var scanCandidate = conns
+            // HIDS-N2: This host holding connections to many distinct ports on one remote
+            // IP — outbound port-scan behaviour (something on this machine probing a target).
+            var scanCandidates = conns
                 .GroupBy(c => c.RemoteEndPoint.Address)
                 .Select(g => new { IP = g.Key, Ports = g.Select(c => c.RemoteEndPoint.Port).Distinct().Count() })
-                .FirstOrDefault(x => x.Ports > 20);
+                .Where(x => x.Ports > 20);
 
-            if (scanCandidate != null)
+            foreach (var candidate in scanCandidates)
                 events.Add(new DetectionEvent
                 {
                     RuleId      = "NET-002",
-                    RuleName    = "Port Scan Detected",
+                    RuleName    = "Outbound Port Scan Detected",
                     Severity    = AlertSeverity.Medium,
                     Type        = AlertType.RECON,
-                    Description = $"Possible port scan: {scanCandidate.IP} reached {scanCandidate.Ports} distinct ports."
+                    Description = $"Possible outbound port scan: {candidate.Ports} distinct ports reached on {candidate.IP}.",
+                    // Description embeds the (volatile) port count — key dedup on the
+                    // target IP so this doesn't re-fire every cycle while ongoing.
+                    DedupeKey   = candidate.IP.ToString()
                 });
 
             // HIDS-N3: High total connection count
@@ -108,7 +94,10 @@ namespace FNPPAnalyzer.Rules.Network
                     RuleName    = "Connection Count Burst",
                     Severity    = AlertSeverity.Medium,
                     Type        = AlertType.RECON,
-                    Description = $"High TCP connection count: {conns.Length} (threshold: {threshold})."
+                    Description = $"High TCP connection count: {conns.Length} (threshold: {threshold}).",
+                    // Volatile count in the description — constant key so an ongoing burst
+                    // re-alerts once per cooldown, not once per 30s cycle.
+                    DedupeKey   = "connection-burst"
                 });
 
             // HIDS-N4: Process from untrusted path with external connections, or Tor circuit usage.
@@ -127,10 +116,17 @@ namespace FNPPAnalyzer.Rules.Network
 
                     if (IsPrivateOrLoopback(c.RemoteAddress)) continue;
 
-                    // Sub-rule A: Tor circuit connection from any process
+                    // Sub-rule A: Tor circuit connection. Ports 9001/9030 are also used by
+                    // ordinary services (SonarQube, HDFS, Tomcat clustering), so processes
+                    // running from trusted install paths are excluded — flag only unknown
+                    // processes or ones running from user-writable locations.
                     if (c.RemotePort == 9001 || c.RemotePort == 9030)
                     {
                         pidToPath.TryGetValue(c.OwningPid, out string? procPath);
+                        if (procPath != null &&
+                            PathTrust.IsUnderTrustedPath(procPath, _config.TrustedExecutionPaths))
+                            continue;
+
                         events.Add(new DetectionEvent
                         {
                             RuleId         = "NET-004",
@@ -139,6 +135,7 @@ namespace FNPPAnalyzer.Rules.Network
                             Type           = AlertType.BACK,
                             Description    = $"PID {c.OwningPid} connected to Tor relay port {c.RemotePort} at {c.RemoteAddress}",
                             ExecutablePath = procPath ?? string.Empty,
+                            DedupeKey      = procPath ?? $"tor:{c.RemoteAddress}",
                             Metadata       = new { Pid = c.OwningPid, Remote = $"{c.RemoteAddress}:{c.RemotePort}", ProcessPath = procPath }
                         });
                         continue;

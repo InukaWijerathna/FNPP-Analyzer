@@ -16,6 +16,21 @@ namespace FNPPAnalyzer.Config
         public int NetworkScanWindowSeconds { get; set; } = 30;
         public string YaraRulesPath { get; set; } = "YaraRules";
 
+        // NET-001 remote ports worth alerting on. Kept deliberately conservative:
+        // common dev/admin ports that used to live here (5000 Flask/UPnP, 8888 Jupyter,
+        // 5900-5901 VNC, 1080 SOCKS) fired constantly on developer machines. Add them
+        // back per-install via config.json if they're suspicious in your environment.
+        public List<int> SuspiciousPorts { get; set; } =
+        [
+            4444, 4445, 4446,       // Metasploit reverse handlers
+            6667, 6697,             // IRC (DarkComet, njRAT C2)
+            1337, 31337,            // "leet" RAT defaults
+            50050,                  // Cobalt Strike team-server
+            40056,                  // Havoc C2 default
+            9001, 9030, 9050, 9051, // Tor relay/SOCKS ports
+            4899,                   // Radmin remote-admin tool
+        ];
+
         /// <summary>True unless config.json explicitly sets Rules[ruleId].Enabled = false.</summary>
         public bool IsRuleEnabled(string ruleId) =>
             !Rules.TryGetValue(ruleId, out var cfg) || cfg.Enabled;

@@ -9,5 +9,8 @@ namespace FNPPAnalyzer.Models
         public string Description { get; init; } = string.Empty;
         public string ExecutablePath { get; init; } = string.Empty;
         public object? Metadata { get; init; }
+
+        /// <summary>See <see cref="Alert.DedupeKey"/> — copied onto the alert by RuleEngine.</summary>
+        public string? DedupeKey { get; init; }
     }
 }

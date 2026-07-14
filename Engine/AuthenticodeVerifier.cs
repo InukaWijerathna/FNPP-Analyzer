@@ -15,10 +15,27 @@ namespace FNPPAnalyzer.Engine
         private const uint TRUST_E_SUBJECT_NOT_TRUSTED = 0x800B0112;
         private const uint TRUST_E_EXPLICIT_DISTRUST   = 0x800B010E;
 
+        // Verification now runs inline on every alert submit (see PostScanFilter), and
+        // UnsignedProcessRule re-checks the same system binaries every cycle — memoize by
+        // mtime+size so unchanged files only pay the WinVerifyTrust cost once.
+        private static readonly FileScanCache<SignatureStatus> Cache = new();
+
         public static SignatureStatus Verify(string filePath)
         {
-            if (!File.Exists(filePath)) return SignatureStatus.Unknown;
+            try
+            {
+                var info = new FileInfo(filePath);
+                if (!info.Exists) return SignatureStatus.Unknown;
+                return Cache.GetOrCompute(filePath, info, () => VerifyCore(filePath));
+            }
+            catch
+            {
+                return SignatureStatus.Unknown;
+            }
+        }
 
+        private static SignatureStatus VerifyCore(string filePath)
+        {
             var embedded = VerifyEmbedded(filePath);
             if (embedded != SignatureStatus.NotSigned) return embedded;
 
@@ -189,7 +206,9 @@ namespace FNPPAnalyzer.Engine
             {
                 0                          => SignatureStatus.Valid,
                 TRUST_E_NOSIGNATURE        => SignatureStatus.NotSigned,
-                TRUST_E_SUBJECT_NOT_TRUSTED => SignatureStatus.NotSigned,
+                // A signature exists but isn't trusted — that's an invalid signature,
+                // not an absent one.
+                TRUST_E_SUBJECT_NOT_TRUSTED => SignatureStatus.Invalid,
                 TRUST_E_EXPLICIT_DISTRUST   => SignatureStatus.Invalid,
                 _                           => SignatureStatus.Invalid
             };
