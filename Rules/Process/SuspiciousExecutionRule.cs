@@ -26,51 +26,46 @@ namespace FNPPAnalyzer.Rules.Process
 
             foreach (var proc in context.Processes)
             {
-                try
+                string? exePath = proc.ExecutablePath;
+                if (exePath == null) continue;
+
+                string procName = proc.Name.ToLower();
+                bool isScriptEngine = Array.Exists(ScriptEngines, e => procName.Contains(e));
+
+                foreach (var rawPath in _config.UntrustedExecutionPaths)
                 {
-                    if (!context.ProcessPaths.TryGetValue(proc.Id, out string? exePath)) continue;
-                    string procName = proc.ProcessName.ToLower();
-                    bool isScriptEngine = Array.Exists(ScriptEngines, e => procName.Contains(e));
+                    string bad = Environment.ExpandEnvironmentVariables(rawPath);
+                    string normalized = bad.EndsWith('\\') ? bad : bad + '\\';
 
-                    foreach (var rawPath in _config.UntrustedExecutionPaths)
+                    if (isScriptEngine)
                     {
-                        string bad = Environment.ExpandEnvironmentVariables(rawPath);
-                        string normalized = bad.EndsWith('\\') ? bad : bad + '\\';
-
-                        if (isScriptEngine)
-                        {
-                            // Script engines live in System32; check their command line for the script path.
-                            context.ProcessCommandLines.TryGetValue(proc.Id, out string? cmdLine);
-                            if (cmdLine != null &&
-                                cmdLine.Contains(normalized, StringComparison.OrdinalIgnoreCase))
-                                events.Add(new DetectionEvent
-                                {
-                                    RuleId = "PROC-003",
-                                    RuleName = "Script from Untrusted Path",
-                                    Severity = AlertSeverity.Medium,
-                                    Type = AlertType.TROJ,
-                                    Description = $"{proc.ProcessName} executing a script from untrusted path: {bad}",
-                                    Metadata = new { ProcessId = proc.Id, CommandLine = cmdLine }
-                                });
-                        }
-                        else if (exePath.StartsWith(normalized, StringComparison.OrdinalIgnoreCase))
-                        {
+                        // Script engines live in System32; check their command line for the script path.
+                        if (proc.CommandLine != null &&
+                            proc.CommandLine.Contains(normalized, StringComparison.OrdinalIgnoreCase))
                             events.Add(new DetectionEvent
                             {
-                                RuleId         = "PROC-002",
-                                RuleName       = "Executable from Untrusted Path",
-                                Severity       = AlertSeverity.Medium,
-                                Type           = AlertType.MAL,
-                                Description    = $"{proc.ProcessName} running from untrusted path: {exePath}",
-                                ExecutablePath = exePath,
-                                Metadata       = new { ProcessId = proc.Id, Path = exePath }
+                                RuleId = "PROC-003",
+                                RuleName = "Script from Untrusted Path",
+                                Severity = AlertSeverity.Medium,
+                                Type = AlertType.TROJ,
+                                Description = $"{proc.Name} executing a script from untrusted path: {bad}",
+                                Metadata = new { ProcessId = proc.Pid, CommandLine = proc.CommandLine }
                             });
-                        }
+                    }
+                    else if (exePath.StartsWith(normalized, StringComparison.OrdinalIgnoreCase))
+                    {
+                        events.Add(new DetectionEvent
+                        {
+                            RuleId         = "PROC-002",
+                            RuleName       = "Executable from Untrusted Path",
+                            Severity       = AlertSeverity.Medium,
+                            Type           = AlertType.MAL,
+                            Description    = $"{proc.Name} running from untrusted path: {exePath}",
+                            ExecutablePath = exePath,
+                            Metadata       = new { ProcessId = proc.Pid, Path = exePath }
+                        });
                     }
                 }
-                catch (System.ComponentModel.Win32Exception) { } // access denied on protected processes — expected
-                catch (InvalidOperationException) { }            // process exited between enumeration and access
-                catch (Exception ex) { lock (ConsoleSync.Lock) Console.Error.WriteLine($"[PROC-002/003] PID {proc.Id}: {ex.GetType().Name}: {ex.Message}"); }
             }
             return events;
         }

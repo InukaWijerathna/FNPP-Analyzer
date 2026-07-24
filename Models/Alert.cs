@@ -15,6 +15,14 @@ namespace FNPPAnalyzer.Models
         public string ExecutablePath { get; init; } = string.Empty;
         public object? Metadata { get; init; }
 
+        /// <summary>
+        /// Optional stable dedup identity for alerts whose Description embeds volatile
+        /// values (counts, timestamps). Without it, path-less alerts fall back to
+        /// deduplicating on the full Description — which never matches when the
+        /// description changes every cycle.
+        /// </summary>
+        public string? DedupeKey { get; init; }
+
         /// <summary>Set by PostScanFilter when the path is Authenticode-valid and whitelisted.</summary>
         public bool Suppressed { get; set; }
 
@@ -29,7 +37,8 @@ namespace FNPPAnalyzer.Models
             SourceProcess  = SourceProcess,
             RuleId         = RuleId,
             ExecutablePath = ExecutablePath,
-            Metadata       = Metadata
+            Metadata       = Metadata,
+            DedupeKey      = DedupeKey
         };
     }
 }

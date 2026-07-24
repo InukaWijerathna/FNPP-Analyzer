@@ -47,9 +47,11 @@ namespace FNPPAnalyzer
                 config.Save(configPath);
 
             _whitelist = new SignatureWhitelist("whitelist.json");
-            _broker  = new AlertBroker("alerts.log", _whitelist);
-            _filter  = new PostScanFilter(_whitelist);
-            var engine = new RuleEngine(_broker, config);
+            _broker  = new AlertBroker("alerts.log");
+            // Filter sits in front of the broker: every alert — scan-cycle or real-time —
+            // gets whitelist/signature treatment before it's stored or displayed.
+            _filter  = new PostScanFilter(_whitelist, _broker);
+            var engine = new RuleEngine(_filter, config);
 
             _yara = new YaraEngine(config.YaraRulesPath);
             if (_yara.IsLoaded)
@@ -76,8 +78,10 @@ namespace FNPPAnalyzer
 
             _broker.AlertRaised += OnAlertRaised;
 
-            // Real-time process creation watcher — runs between scan cycles
-            _watcher = new ProcessCreationWatcher(_broker, config);
+            // Real-time process creation watcher — runs between scan cycles.
+            // Submits through the filter so RT alerts get the same signature-based
+            // suppression/escalation as scan alerts.
+            _watcher = new ProcessCreationWatcher(_filter, config);
             _watcher.Start();
 
             MenuLoop(engine);
@@ -141,8 +145,9 @@ namespace FNPPAnalyzer
             AnsiConsole.Write(new Rule("[bold cyan]Detection Scan[/]").RuleStyle("grey"));
 
             int priorCount = _broker!.GetAll().Count;
-            // +1 for context build, +1 for signature verification, +N for each rule
-            int totalSteps = engine.RuleCount + 2;
+            // +1 for context build, +N for each rule. Signature verification happens
+            // inline as alerts are submitted (see PostScanFilter) — no separate phase.
+            int totalSteps = engine.RuleCount + 1;
 
             FilterResult? result = null;
 
@@ -207,13 +212,7 @@ namespace FNPPAnalyzer
 
                         engine.RunCycle(reporter);
 
-                        lock (ConsoleSync.Lock)
-                        {
-                            task.Description = $"[grey][[{totalSteps - 1}/{totalSteps}]][/] [cyan]Verifying signatures...[/]\n";
-                            task.Value       = totalSteps - 1;
-                            ctx.Refresh();
-                        }
-                        result = _filter!.Process(_broker.GetFrom(priorCount));
+                        result = _filter!.CollectResult(_broker.GetFrom(priorCount));
                         lock (ConsoleSync.Lock)
                         {
                             task.Value = totalSteps;
@@ -248,9 +247,10 @@ namespace FNPPAnalyzer
             {
                 while (!token.IsCancellationRequested)
                 {
-                    int prior = _broker!.GetAll().Count;
                     engine.RunCycle();
-                    _filter!.Process(_broker.GetFrom(prior));
+                    // Filtering happens inline at submit time; drain the whitelist-addition
+                    // list so it doesn't accumulate across unattended cycles.
+                    _filter!.DrainNewlyWhitelisted();
 
                     try { await Task.Delay(ScanInterval * 1000, token); }
                     catch (OperationCanceledException) { break; }

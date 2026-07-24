@@ -76,34 +76,30 @@ namespace FNPPAnalyzer.Rules.Process
 
             foreach (var proc in context.Processes)
             {
-                try
+                string procName = proc.Name.ToLower();
+                if (!Patterns.TryGetValue(procName, out var lolPatterns)) continue;
+
+                string? cmdLine = proc.CommandLine;
+                if (string.IsNullOrWhiteSpace(cmdLine)) continue;
+
+                foreach (var pattern in lolPatterns)
                 {
-                    string procName = proc.ProcessName.ToLower();
-                    if (!Patterns.TryGetValue(procName, out var lolPatterns)) continue;
+                    bool allMatch = true;
+                    foreach (var arg in pattern.TriggerArgs)
+                        if (!cmdLine.Contains(arg, StringComparison.OrdinalIgnoreCase))
+                        { allMatch = false; break; }
 
-                    context.ProcessCommandLines.TryGetValue(proc.Id, out string? cmdLine);
-                    if (string.IsNullOrWhiteSpace(cmdLine)) continue;
-
-                    foreach (var pattern in lolPatterns)
-                    {
-                        bool allMatch = true;
-                        foreach (var arg in pattern.TriggerArgs)
-                            if (!cmdLine.Contains(arg, StringComparison.OrdinalIgnoreCase))
-                            { allMatch = false; break; }
-
-                        if (allMatch)
-                            events.Add(new DetectionEvent
-                            {
-                                RuleId = RuleId,
-                                RuleName = Name,
-                                Severity = pattern.Severity,
-                                Type = pattern.Type,
-                                Description = $"{proc.ProcessName}: {pattern.Reason}",
-                                Metadata = new { ProcessId = proc.Id, CommandLine = cmdLine }
-                            });
-                    }
+                    if (allMatch)
+                        events.Add(new DetectionEvent
+                        {
+                            RuleId = RuleId,
+                            RuleName = Name,
+                            Severity = pattern.Severity,
+                            Type = pattern.Type,
+                            Description = $"{proc.Name}: {pattern.Reason}",
+                            Metadata = new { ProcessId = proc.Pid, CommandLine = cmdLine }
+                        });
                 }
-                catch { }
             }
             return events;
         }

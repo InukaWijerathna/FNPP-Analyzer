@@ -27,30 +27,27 @@ namespace FNPPAnalyzer.Rules.Process
 
             foreach (var proc in context.Processes)
             {
-                try
-                {
-                    string procName = proc.ProcessName.ToLower();
-                    if (!_config.TrustedSystemProcesses.Contains(procName + ".exe")) continue;
+                string procName = proc.Name.ToLower();
+                if (!_config.TrustedSystemProcesses.Contains(procName + ".exe")) continue;
 
-                    if (!context.ProcessPaths.TryGetValue(proc.Id, out string? path)) continue;
+                string? path = proc.ExecutablePath;
+                if (path == null) continue;
 
-                    bool isLegit = procName == "explorer"
-                        ? path.Equals(ExplorerPath, StringComparison.OrdinalIgnoreCase)
-                        : PathTrust.IsUnderTrustedPath(path, _config.TrustedExecutionPaths);
+                bool isLegit = procName == "explorer"
+                    ? path.Equals(ExplorerPath, StringComparison.OrdinalIgnoreCase)
+                    : PathTrust.IsUnderTrustedPath(path, _config.TrustedExecutionPaths);
 
-                    if (!isLegit)
-                        events.Add(new DetectionEvent
-                        {
-                            RuleId         = RuleId,
-                            RuleName       = Name,
-                            Severity       = AlertSeverity.High,
-                            Type           = AlertType.MAL,
-                            Description    = $"System process {proc.ProcessName} running from unexpected location: {path}",
-                            ExecutablePath = path,
-                            Metadata       = new { ProcessId = proc.Id, Path = path }
-                        });
-                }
-                catch { }
+                if (!isLegit)
+                    events.Add(new DetectionEvent
+                    {
+                        RuleId         = RuleId,
+                        RuleName       = Name,
+                        Severity       = AlertSeverity.High,
+                        Type           = AlertType.MAL,
+                        Description    = $"System process {proc.Name} running from unexpected location: {path}",
+                        ExecutablePath = path,
+                        Metadata       = new { ProcessId = proc.Pid, Path = path }
+                    });
             }
             return events;
         }

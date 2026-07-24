@@ -43,14 +43,11 @@ namespace FNPPAnalyzer.Rules.Files
             // 1. Running process executables
             foreach (var proc in context.Processes)
             {
-                try
-                {
-                    if (!context.ProcessPaths.TryGetValue(proc.Id, out string? path) || !scanned.Add(path)) continue;
+                string? path = proc.ExecutablePath;
+                if (path == null || !scanned.Add(path)) continue;
 
-                    context.ReportDetail?.Invoke(path);
-                    ScanAndCollect(path, events, processId: proc.Id, processName: proc.ProcessName);
-                }
-                catch { }
+                context.ReportDetail?.Invoke(path);
+                ScanAndCollect(path, events, processId: proc.Pid, processName: proc.Name);
             }
 
             // 2. Files in untrusted directories
@@ -74,15 +71,12 @@ namespace FNPPAnalyzer.Rules.Files
             // memory every cycle would be far too costly for live monitoring.
             foreach (var proc in context.Processes)
             {
-                try
-                {
-                    if (!context.ProcessPaths.TryGetValue(proc.Id, out string? path) ||
-                        PathTrust.IsUnderTrustedPath(path, _config.TrustedExecutionPaths)) continue;
+                string? path = proc.ExecutablePath;
+                if (path == null ||
+                    PathTrust.IsUnderTrustedPath(path, _config.TrustedExecutionPaths)) continue;
 
-                    context.ReportDetail?.Invoke($"{proc.ProcessName} (PID {proc.Id}) [memory]");
-                    ScanProcessMemoryAndCollect(proc.Id, proc.ProcessName, path, events);
-                }
-                catch { }
+                context.ReportDetail?.Invoke($"{proc.Name} (PID {proc.Pid}) [memory]");
+                ScanProcessMemoryAndCollect(proc.Pid, proc.Name, path, events);
             }
 
             return events;

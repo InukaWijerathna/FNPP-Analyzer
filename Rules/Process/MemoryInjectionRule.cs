@@ -74,18 +74,18 @@ namespace FNPPAnalyzer.Rules.Process
             {
                 // Only scan processes that are listed as trusted system processes.
                 // These should have no private executable memory outside their loaded modules.
-                string name = proc.ProcessName.ToLowerInvariant() + ".exe";
+                string name = proc.Name.ToLowerInvariant() + ".exe";
                 bool isSystemProc = _config.TrustedSystemProcesses
                     .Exists(p => string.Equals(p, name, StringComparison.OrdinalIgnoreCase) ||
-                                 string.Equals(p, proc.ProcessName, StringComparison.OrdinalIgnoreCase));
+                                 string.Equals(p, proc.Name, StringComparison.OrdinalIgnoreCase));
                 if (!isSystemProc) continue;
 
-                IntPtr hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, proc.Id);
+                IntPtr hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, proc.Pid);
                 if (hProcess == IntPtr.Zero) continue;
 
                 try
                 {
-                    ScanProcessMemory(proc.Id, proc.ProcessName, hProcess, events);
+                    ScanProcessMemory(proc.Pid, proc.Name, hProcess, events);
                 }
                 finally { CloseHandle(hProcess); }
             }

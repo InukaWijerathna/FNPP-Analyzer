@@ -35,80 +35,101 @@ namespace FNPPAnalyzer.Engine
         /// <param name="progress">
         /// Optional progress sink. Receives ticks as each phase starts:
         /// (0, total, "Building scan context"), (1, total, ruleName), …
-        /// Caller is responsible for the final "Verifying signatures" tick.
         /// </param>
         public void RunCycle(IProgress<ScanProgress>? progress = null)
         {
-            // +1 for context build; caller adds +1 for signature verification
-            int total = _rules.Count + 1;
+            int total = _rules.Count + 1; // +1 for context build
             int done  = 0;
 
             progress?.Report(new(done, total, "Building scan context"));
             var context = BuildContext();
 
-            try
+            foreach (var rule in _rules)
             {
-                foreach (var rule in _rules)
+                done++;
+                int stepDone = done;
+                progress?.Report(new(stepDone, total, rule.Name));
+
+                // Skips the rule's work entirely when it's disabled by its own RuleId.
+                // Rules that emit several leaf IDs (e.g. "FILE" -> FILE-001/FILE-002)
+                // aren't keyed in config under that umbrella ID, so this is a no-op for
+                // them — the per-event check below is what actually enforces those.
+                if (!_config.IsRuleEnabled(rule.RuleId)) continue;
+
+                // Lets rules surface a sub-status (e.g. the file path being scanned)
+                // beneath the main phase line without changing the step count.
+                context.ReportDetail = detail => progress?.Report(new(stepDone, total, rule.Name, detail));
+
+                try
                 {
-                    done++;
-                    int stepDone = done;
-                    progress?.Report(new(stepDone, total, rule.Name));
-
-                    // Skips the rule's work entirely when it's disabled by its own RuleId.
-                    // Rules that emit several leaf IDs (e.g. "FILE" -> FILE-001/FILE-002)
-                    // aren't keyed in config under that umbrella ID, so this is a no-op for
-                    // them — the per-event check below is what actually enforces those.
-                    if (!_config.IsRuleEnabled(rule.RuleId)) continue;
-
-                    // Lets rules surface a sub-status (e.g. the file path being scanned)
-                    // beneath the main phase line without changing the step count.
-                    context.ReportDetail = detail => progress?.Report(new(stepDone, total, rule.Name, detail));
-
-                    try
+                    foreach (var evt in rule.Evaluate(context))
                     {
-                        foreach (var evt in rule.Evaluate(context))
+                        if (!_config.IsRuleEnabled(evt.RuleId)) continue;
+
+                        _sink.Submit(new Alert
                         {
-                            if (!_config.IsRuleEnabled(evt.RuleId)) continue;
-
-                            _sink.Submit(new Alert
-                            {
-                                RuleId         = evt.RuleId,
-                                Title          = evt.RuleName,
-                                Description    = evt.Description,
-                                Severity       = _config.SeverityOverride(evt.RuleId) ?? evt.Severity,
-                                Type           = evt.Type,
-                                SourceProcess  = "System",
-                                ExecutablePath = evt.ExecutablePath,
-                                Metadata       = evt.Metadata
-                            });
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        lock (ConsoleSync.Lock) Console.Error.WriteLine($"[rule:{rule.RuleId}] {ex.Message}");
+                            RuleId         = evt.RuleId,
+                            Title          = evt.RuleName,
+                            Description    = evt.Description,
+                            Severity       = _config.SeverityOverride(evt.RuleId) ?? evt.Severity,
+                            Type           = evt.Type,
+                            SourceProcess  = "System",
+                            ExecutablePath = evt.ExecutablePath,
+                            Metadata       = evt.Metadata,
+                            DedupeKey      = evt.DedupeKey
+                        });
                     }
                 }
+                catch (Exception ex)
+                {
+                    lock (ConsoleSync.Lock) Console.Error.WriteLine($"[rule:{rule.RuleId}] {ex.Message}");
+                }
+            }
 
-                context.ReportDetail = null;
-            }
-            finally
-            {
-                context.Release();
-            }
+            context.ReportDetail = null;
         }
 
         private ScanContext BuildContext()
         {
             var (cmdLines, parentPids) = LoadProcessDetails();
-            var processes = Process.GetProcesses();
+
+            var snapshots = new List<ProcessInfo>();
+            var paths     = new Dictionary<int, string>();
+
+            // Live Process handles are consumed (and disposed) right here — rules only
+            // ever see the plain-data ProcessInfo snapshots.
+            foreach (var proc in Process.GetProcesses())
+            {
+                try
+                {
+                    int pid = proc.Id;
+                    string name = proc.ProcessName;
+
+                    string? path = null;
+                    // MainModule is a real native call and throws on protected processes.
+                    try { path = proc.MainModule?.FileName; } catch { }
+                    if (!string.IsNullOrEmpty(path)) paths[pid] = path;
+
+                    snapshots.Add(new ProcessInfo(
+                        Pid:            pid,
+                        Name:           name,
+                        ExecutablePath: string.IsNullOrEmpty(path) ? null : path,
+                        CommandLine:    cmdLines.TryGetValue(pid, out var cmd) ? cmd : null,
+                        ParentPid:      parentPids.TryGetValue(pid, out var ppid) ? ppid : null));
+                }
+                catch { }
+                finally
+                {
+                    try { proc.Dispose(); } catch { }
+                }
+            }
+
             return new ScanContext
             {
-                Processes = processes,
-                ProcessPaths = LoadProcessPaths(processes),
+                Processes = snapshots,
+                ProcessPaths = paths,
                 TcpConnections = IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpConnections(),
                 TcpConnectionsWithPid = NetworkHelper.GetTcpWithPid(),
-                ProcessCommandLines = cmdLines,
-                ParentPids = parentPids,
                 UntrustedDirectoryFiles = LoadUntrustedDirectoryFiles()
             };
         }
@@ -135,25 +156,19 @@ namespace FNPPAnalyzer.Engine
             return (cmdLines, parentPids);
         }
 
-        // proc.MainModule access is a real native call per process — resolve it once here
-        // instead of letting each rule that needs an executable path repeat it.
-        private static Dictionary<int, string> LoadProcessPaths(Process[] processes)
-        {
-            var paths = new Dictionary<int, string>(processes.Length);
-            foreach (var proc in processes)
-            {
-                try
-                {
-                    string? path = proc.MainModule?.FileName;
-                    if (!string.IsNullOrEmpty(path)) paths[proc.Id] = path;
-                }
-                catch { }
-            }
-            return paths;
-        }
-
         // Recursively lists each untrusted directory once per cycle — FileScannerRule,
-        // KnownHashRule and YaraScanRule all used to walk these same trees independently.
+        // KnownHashRule, PeImportRule and YaraScanRule all consume the same listing.
+        //
+        // AttributesToSkip: only reparse points (junction/symlink loops would otherwise
+        // recurse forever). The default also skips Hidden and System — which would blind
+        // FILE-002 (hidden executables), so it's set explicitly.
+        private static readonly System.IO.EnumerationOptions UntrustedDirEnumeration = new()
+        {
+            RecurseSubdirectories = true,
+            IgnoreInaccessible    = true, // one locked subfolder must not zero out the whole tree
+            AttributesToSkip      = FileAttributes.ReparsePoint
+        };
+
         private Dictionary<string, string[]> LoadUntrustedDirectoryFiles()
         {
             var result = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
@@ -163,7 +178,7 @@ namespace FNPPAnalyzer.Engine
                 if (result.ContainsKey(dir)) continue;
                 if (!Directory.Exists(dir)) { result[dir] = []; continue; }
 
-                try { result[dir] = Directory.GetFiles(dir, "*.*", SearchOption.AllDirectories); }
+                try { result[dir] = Directory.GetFiles(dir, "*", UntrustedDirEnumeration); }
                 catch (Exception ex)
                 {
                     lock (ConsoleSync.Lock) Console.Error.WriteLine($"[ScanContext] {dir}: {ex.Message}");

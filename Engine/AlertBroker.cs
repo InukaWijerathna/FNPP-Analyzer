@@ -6,6 +6,11 @@ using FNPPAnalyzer.Models;
 
 namespace FNPPAnalyzer.Engine
 {
+    /// <summary>
+    /// Terminal alert sink: deduplicates, stores, logs, and raises events. Signature-based
+    /// suppression happens upstream in <see cref="PostScanFilter"/> before alerts get here,
+    /// so an alert's Suppressed flag is already settled when AlertRaised fires.
+    /// </summary>
     public class AlertBroker : IAlertSink
     {
         // Re-alerting the same fingerprint within this window is treated as the same ongoing
@@ -14,10 +19,13 @@ namespace FNPPAnalyzer.Engine
         // even if the underlying malicious behaviour recurs.
         private static readonly TimeSpan DefaultDedupeCooldown = TimeSpan.FromHours(1);
 
+        // When _lastSeen exceeds this, expired entries are pruned on the next submit —
+        // keeps the map bounded during long live-monitor sessions.
+        private const int LastSeenPruneThreshold = 512;
+
         private readonly List<Alert> _alerts = new();
         private readonly Dictionary<string, DateTime> _lastSeen = new();
         private readonly string _logPath;
-        private readonly SignatureWhitelist _whitelist;
         private readonly TimeSpan _dedupeCooldown;
         private readonly object _lock = new();
 
@@ -25,36 +33,28 @@ namespace FNPPAnalyzer.Engine
 
         public string LogPath => _logPath;
 
-        public AlertBroker(string logPath = "alerts.log", SignatureWhitelist? whitelist = null)
-            : this(logPath, whitelist, DefaultDedupeCooldown)
+        public AlertBroker(string logPath = "alerts.log")
+            : this(logPath, DefaultDedupeCooldown)
         {
         }
 
         /// <summary>Test-only seam — lets tests use a short cooldown instead of waiting an hour.</summary>
-        internal AlertBroker(string logPath, SignatureWhitelist? whitelist, TimeSpan dedupeCooldown)
+        internal AlertBroker(string logPath, TimeSpan dedupeCooldown)
         {
             _logPath        = logPath;
-            _whitelist      = whitelist ?? new SignatureWhitelist();
             _dedupeCooldown = dedupeCooldown;
         }
 
         public void Submit(Alert alert)
         {
-            // Efficiency gate: paths already verified and whitelisted in a prior scan are
-            // dropped here before dedup/logging so they never appear in the alert list.
-            // High-trust rules (see TrustPolicy) bypass this — their finding is the verdict,
-            // and a valid signature on the path doesn't change that.
-            if (!TrustPolicy.HighTrustRuleIds.Contains(alert.RuleId) &&
-                !string.IsNullOrEmpty(alert.ExecutablePath) &&
-                _whitelist.IsWhitelisted(alert.ExecutablePath))
-                return;
+            // Identity for dedup, most-specific first: an explicit DedupeKey (for alerts
+            // whose Description embeds volatile values), then the executable path (so the
+            // same rule firing on two different binaries stays two alerts), then the
+            // description as a last resort.
+            string identity = alert.DedupeKey
+                ?? (string.IsNullOrEmpty(alert.ExecutablePath) ? alert.Description : alert.ExecutablePath);
+            string fingerprint = $"{alert.RuleId}:{identity}";
 
-            // Include path when available so the same rule firing on two different binaries
-            // produces two distinct alerts rather than silently deduplicating the second one.
-            string fingerprint = string.IsNullOrEmpty(alert.ExecutablePath)
-                ? $"{alert.RuleId}:{alert.Description}"
-                : $"{alert.RuleId}:{alert.ExecutablePath}";
-            Alert? toFire = null;
             DateTime now = DateTime.UtcNow;
 
             lock (_lock)
@@ -62,13 +62,28 @@ namespace FNPPAnalyzer.Engine
                 if (_lastSeen.TryGetValue(fingerprint, out var last) && now - last < _dedupeCooldown)
                     return;
 
+                if (_lastSeen.Count > LastSeenPruneThreshold)
+                    PruneExpired(now);
+
                 _lastSeen[fingerprint] = now;
                 _alerts.Add(alert);
                 WriteLog(alert);
-                toFire = alert;
             }
 
-            AlertRaised?.Invoke(toFire);
+            // Suppressed alerts are stored (greyed out in the Alerts view) but never
+            // interrupt the terminal.
+            if (!alert.Suppressed)
+                AlertRaised?.Invoke(alert);
+        }
+
+        private void PruneExpired(DateTime now)
+        {
+            var expired = new List<string>();
+            foreach (var kv in _lastSeen)
+                if (now - kv.Value >= _dedupeCooldown)
+                    expired.Add(kv.Key);
+            foreach (var key in expired)
+                _lastSeen.Remove(key);
         }
 
         public IReadOnlyList<Alert> GetAll()

@@ -1,25 +1,31 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Net.NetworkInformation;
 
 namespace FNPPAnalyzer.Engine
 {
+    /// <summary>
+    /// Plain-data snapshot of one process, taken once per scan cycle. Rules consume this
+    /// instead of live System.Diagnostics.Process objects so they are pure functions over
+    /// data — unit-testable with fabricated snapshots, and free of per-rule native calls.
+    /// </summary>
+    public sealed record ProcessInfo(
+        int Pid,
+        string Name,             // e.g. "svchost" (no extension)
+        string? ExecutablePath,  // null when MainModule was inaccessible
+        string? CommandLine,     // null when WMI had no entry
+        int? ParentPid);
+
     public class ScanContext
     {
-        public Process[] Processes { get; init; } = [];
+        public IReadOnlyList<ProcessInfo> Processes { get; init; } = [];
         public TcpConnectionInformation[] TcpConnections { get; init; } = [];
 
         // PID-aware TCP connections from GetExtendedTcpTable; empty list if unavailable
         public List<TcpConnectionWithPid> TcpConnectionsWithPid { get; init; } = [];
 
-        // Keyed by PID — loaded in one WMI query to avoid double round-trips
-        public Dictionary<int, string?> ProcessCommandLines { get; init; } = new();
-        public Dictionary<int, int> ParentPids { get; init; } = new();
-
-        // proc.MainModule.FileName resolved once per process here — half a dozen rules used
-        // to each call it independently, multiplying an already-expensive native call by
-        // the number of rules that need a process's executable path.
+        // PID → executable path, for rules that join network/PID data against processes.
+        // Same data as Processes[i].ExecutablePath, pre-indexed.
         public Dictionary<int, string> ProcessPaths { get; init; } = new();
 
         // Recursive directory listing for each (expanded) UntrustedExecutionPaths entry,
@@ -30,11 +36,5 @@ namespace FNPPAnalyzer.Engine
         // Set by RuleEngine before each rule's Evaluate() runs — lets file-scanning rules
         // surface the path they're currently working on beneath the progress bar.
         public Action<string>? ReportDetail { get; set; }
-
-        public void Release()
-        {
-            foreach (var p in Processes)
-                try { p.Dispose(); } catch { }
-        }
     }
 }

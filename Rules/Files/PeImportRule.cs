@@ -72,26 +72,22 @@ namespace FNPPAnalyzer.Rules.Files
         {
             var events = new List<DetectionEvent>();
 
+            // Reuses the per-cycle directory listing from ScanContext instead of doing its
+            // own walk — this also makes coverage recursive, consistent with FILE-001/002/003/005.
             foreach (var rawPath in _config.UntrustedExecutionPaths)
             {
                 string dir = Environment.ExpandEnvironmentVariables(rawPath);
-                if (!Directory.Exists(dir)) continue;
+                if (!context.UntrustedDirectoryFiles.TryGetValue(dir, out var files)) continue;
 
-                try
+                foreach (var file in files)
                 {
-                    foreach (var file in Directory.GetFiles(dir, "*.exe", SearchOption.TopDirectoryOnly))
-                    {
-                        context.ReportDetail?.Invoke(file);
-                        events.AddRange(ScanFileCached(file));
-                    }
+                    if (!file.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) &&
+                        !file.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+                        continue;
 
-                    foreach (var file in Directory.GetFiles(dir, "*.dll", SearchOption.TopDirectoryOnly))
-                    {
-                        context.ReportDetail?.Invoke(file);
-                        events.AddRange(ScanFileCached(file));
-                    }
+                    context.ReportDetail?.Invoke(file);
+                    events.AddRange(ScanFileCached(file));
                 }
-                catch { }
             }
             return events;
         }
